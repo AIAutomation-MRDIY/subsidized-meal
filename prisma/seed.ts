@@ -14,10 +14,40 @@ import bcrypt from 'bcryptjs';
 
 import { prisma } from '../src/lib/prisma';
 import { encodeTags } from '../src/lib/db-compat';
-import { addWeeks, defaultWindowFor, mondayOf, todayInAppTz, serviceDatesFor } from '../src/lib/cycle';
+import {
+  addWeeks,
+  defaultWindowFor,
+  mondayOf,
+  todayInAppTz,
+  serviceDatesFor,
+} from '../src/lib/cycle';
 import { calculateSubsidy } from '../src/lib/subsidy';
 
-const PASSWORD = process.env.SEED_DEFAULT_PASSWORD ?? 'ChangeMe123!';
+/**
+ * Demo accounts all share one password. That is fine on a laptop and not fine
+ * on anything reachable from the internet - the default is documented in the
+ * README, so a public deployment seeded with it would have a publicly known
+ * admin login. Require an explicit password when the target is remote.
+ */
+function seedPassword(): string {
+  const explicit = process.env.SEED_DEFAULT_PASSWORD;
+  if (explicit) return explicit;
+
+  if (process.env.SEED_TARGET_REMOTE) {
+    console.error(
+      '\nRefusing to seed a remote database with the default demo password.\n' +
+        'The default is published in the README, so seeding a hosted deployment\n' +
+        'with it would leave a publicly known administrator account.\n\n' +
+        'Set SEED_DEFAULT_PASSWORD to something only you know, for example:\n' +
+        '  SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)" npm run db:seed\n',
+    );
+    process.exit(1);
+  }
+
+  return 'ChangeMe123!';
+}
+
+const PASSWORD = seedPassword();
 
 /** Deterministic PRNG so repeated seeds produce the same demo numbers. */
 function makeRandom(seed: number) {
@@ -40,18 +70,90 @@ async function main() {
   const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
   const staffSpec = [
-    { email: 'admin@mrdiy.com', name: 'Aisyah Rahman', role: 'ADMIN' as const, department: 'IT', staffId: 'EMP-00001' },
-    { email: 'analytics@mrdiy.com', name: 'Daniel Wong', role: 'ANALYTICS' as const, department: 'Strategy', staffId: 'EMP-00002' },
-    { email: 'finance@mrdiy.com', name: 'Priya Nair', role: 'FINANCE' as const, department: 'Finance', staffId: 'EMP-00003' },
-    { email: 'user@mrdiy.com', name: 'Farhan Idris', role: 'USER' as const, department: 'Operations', staffId: 'EMP-00004' },
-    { email: 'siti.zahra@mrdiy.com', name: 'Siti Zahra', role: 'USER' as const, department: 'Operations', staffId: 'EMP-00005' },
-    { email: 'lim.wei@mrdiy.com', name: 'Lim Wei Jian', role: 'USER' as const, department: 'Merchandising', staffId: 'EMP-00006' },
-    { email: 'kavitha.r@mrdiy.com', name: 'Kavitha Ramasamy', role: 'USER' as const, department: 'Merchandising', staffId: 'EMP-00007' },
-    { email: 'hafiz.omar@mrdiy.com', name: 'Hafiz Omar', role: 'USER' as const, department: 'Warehouse', staffId: 'EMP-00008' },
-    { email: 'chong.mei@mrdiy.com', name: 'Chong Mei Ling', role: 'USER' as const, department: 'Warehouse', staffId: 'EMP-00009' },
-    { email: 'arif.samad@mrdiy.com', name: 'Arif Samad', role: 'USER' as const, department: 'IT', staffId: 'EMP-00010' },
-    { email: 'nurul.ain@mrdiy.com', name: 'Nurul Ain', role: 'USER' as const, department: 'Finance', staffId: 'EMP-00011' },
-    { email: 'tan.hock@mrdiy.com', name: 'Tan Hock Seng', role: 'USER' as const, department: 'Operations', staffId: 'EMP-00012' },
+    {
+      email: 'admin@mrdiy.com',
+      name: 'Aisyah Rahman',
+      role: 'ADMIN' as const,
+      department: 'IT',
+      staffId: 'EMP-00001',
+    },
+    {
+      email: 'analytics@mrdiy.com',
+      name: 'Daniel Wong',
+      role: 'ANALYTICS' as const,
+      department: 'Strategy',
+      staffId: 'EMP-00002',
+    },
+    {
+      email: 'finance@mrdiy.com',
+      name: 'Priya Nair',
+      role: 'FINANCE' as const,
+      department: 'Finance',
+      staffId: 'EMP-00003',
+    },
+    {
+      email: 'user@mrdiy.com',
+      name: 'Farhan Idris',
+      role: 'USER' as const,
+      department: 'Operations',
+      staffId: 'EMP-00004',
+    },
+    {
+      email: 'siti.zahra@mrdiy.com',
+      name: 'Siti Zahra',
+      role: 'USER' as const,
+      department: 'Operations',
+      staffId: 'EMP-00005',
+    },
+    {
+      email: 'lim.wei@mrdiy.com',
+      name: 'Lim Wei Jian',
+      role: 'USER' as const,
+      department: 'Merchandising',
+      staffId: 'EMP-00006',
+    },
+    {
+      email: 'kavitha.r@mrdiy.com',
+      name: 'Kavitha Ramasamy',
+      role: 'USER' as const,
+      department: 'Merchandising',
+      staffId: 'EMP-00007',
+    },
+    {
+      email: 'hafiz.omar@mrdiy.com',
+      name: 'Hafiz Omar',
+      role: 'USER' as const,
+      department: 'Warehouse',
+      staffId: 'EMP-00008',
+    },
+    {
+      email: 'chong.mei@mrdiy.com',
+      name: 'Chong Mei Ling',
+      role: 'USER' as const,
+      department: 'Warehouse',
+      staffId: 'EMP-00009',
+    },
+    {
+      email: 'arif.samad@mrdiy.com',
+      name: 'Arif Samad',
+      role: 'USER' as const,
+      department: 'IT',
+      staffId: 'EMP-00010',
+    },
+    {
+      email: 'nurul.ain@mrdiy.com',
+      name: 'Nurul Ain',
+      role: 'USER' as const,
+      department: 'Finance',
+      staffId: 'EMP-00011',
+    },
+    {
+      email: 'tan.hock@mrdiy.com',
+      name: 'Tan Hock Seng',
+      role: 'USER' as const,
+      department: 'Operations',
+      staffId: 'EMP-00012',
+    },
   ];
 
   const users: User[] = [];
@@ -59,7 +161,12 @@ async function main() {
     users.push(
       await prisma.user.upsert({
         where: { email: spec.email },
-        update: { name: spec.name, role: spec.role, department: spec.department, staffId: spec.staffId },
+        update: {
+          name: spec.name,
+          role: spec.role,
+          department: spec.department,
+          staffId: spec.staffId,
+        },
         create: { ...spec, passwordHash, authProvider: 'LOCAL' },
       }),
     );
@@ -69,40 +176,93 @@ async function main() {
   // --- Catalogue -------------------------------------------------------
   const catalogue: Array<{
     restaurant: { name: string; cuisine: string; contactName: string; contactPhone: string };
-    dishes: Array<{ name: string; priceSen: number; category: string; tags: string[]; description?: string }>;
+    dishes: Array<{
+      name: string;
+      priceSen: number;
+      category: string;
+      tags: string[];
+      description?: string;
+    }>;
   }> = [
     {
-      restaurant: { name: 'Nasi Kandar Pelita', cuisine: 'Mamak', contactName: 'Encik Zul', contactPhone: '03-2141 5678' },
+      restaurant: {
+        name: 'Nasi Kandar Pelita',
+        cuisine: 'Mamak',
+        contactName: 'Encik Zul',
+        contactPhone: '03-2141 5678',
+      },
       dishes: [
-        { name: 'Nasi Kandar Ayam Goreng', priceSen: 1250, category: 'Main', tags: ['halal', 'spicy'], description: 'Fried chicken with mixed curry gravy' },
+        {
+          name: 'Nasi Kandar Ayam Goreng',
+          priceSen: 1250,
+          category: 'Main',
+          tags: ['halal', 'spicy'],
+          description: 'Fried chicken with mixed curry gravy',
+        },
         { name: 'Nasi Kandar Daging Kicap', priceSen: 1450, category: 'Main', tags: ['halal'] },
         { name: 'Roti Canai Set', priceSen: 750, category: 'Light', tags: ['halal', 'vegetarian'] },
         { name: 'Mee Goreng Mamak', priceSen: 950, category: 'Main', tags: ['halal', 'spicy'] },
       ],
     },
     {
-      restaurant: { name: 'Kedai Kopi Ah Seng', cuisine: 'Chinese', contactName: 'Ah Seng', contactPhone: '03-7788 1234' },
+      restaurant: {
+        name: 'Kedai Kopi Ah Seng',
+        cuisine: 'Chinese',
+        contactName: 'Ah Seng',
+        contactPhone: '03-7788 1234',
+      },
       dishes: [
-        { name: 'Chicken Rice', priceSen: 1100, category: 'Main', tags: [], description: 'Steamed chicken with fragrant rice' },
+        {
+          name: 'Chicken Rice',
+          priceSen: 1100,
+          category: 'Main',
+          tags: [],
+          description: 'Steamed chicken with fragrant rice',
+        },
         { name: 'Wantan Mee', priceSen: 1000, category: 'Main', tags: [] },
         { name: 'Char Kuey Teow', priceSen: 1150, category: 'Main', tags: ['spicy'] },
         { name: 'Kopi O Ice', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
       ],
     },
     {
-      restaurant: { name: 'Green Bowl', cuisine: 'Healthy', contactName: 'Melissa Koh', contactPhone: '012-345 6789' },
+      restaurant: {
+        name: 'Green Bowl',
+        cuisine: 'Healthy',
+        contactName: 'Melissa Koh',
+        contactPhone: '012-345 6789',
+      },
       dishes: [
-        { name: 'Grilled Chicken Quinoa Bowl', priceSen: 1650, category: 'Main', tags: ['halal', 'high-protein'] },
-        { name: 'Tofu Buddha Bowl', priceSen: 1450, category: 'Main', tags: ['vegetarian', 'vegan'] },
+        {
+          name: 'Grilled Chicken Quinoa Bowl',
+          priceSen: 1650,
+          category: 'Main',
+          tags: ['halal', 'high-protein'],
+        },
+        {
+          name: 'Tofu Buddha Bowl',
+          priceSen: 1450,
+          category: 'Main',
+          tags: ['vegetarian', 'vegan'],
+        },
         { name: 'Salmon Poke Bowl', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
         { name: 'Fresh Fruit Cup', priceSen: 600, category: 'Side', tags: ['vegetarian', 'vegan'] },
       ],
     },
     {
-      restaurant: { name: 'Warung Bu Tini', cuisine: 'Indonesian', contactName: 'Bu Tini', contactPhone: '011-2233 4455' },
+      restaurant: {
+        name: 'Warung Bu Tini',
+        cuisine: 'Indonesian',
+        contactName: 'Bu Tini',
+        contactPhone: '011-2233 4455',
+      },
       dishes: [
         { name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
-        { name: 'Gado-Gado', priceSen: 1050, category: 'Main', tags: ['halal', 'vegetarian', 'contains-nuts'] },
+        {
+          name: 'Gado-Gado',
+          priceSen: 1050,
+          category: 'Main',
+          tags: ['halal', 'vegetarian', 'contains-nuts'],
+        },
         { name: 'Soto Ayam', priceSen: 1200, category: 'Main', tags: ['halal'] },
         { name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
       ],
@@ -171,7 +331,12 @@ async function main() {
   // Past service weeks, already delivered.
   for (let back = 3; back >= 1; back--) {
     const weekStart = addWeeks(thisMonday, -back);
-    await buildCycle({ weekStart, status: 'FULFILLED', ...defaultWindowFor(weekStart), withOrders: true });
+    await buildCycle({
+      weekStart,
+      status: 'FULFILLED',
+      ...defaultWindowFor(weekStart),
+      withOrders: true,
+    });
   }
 
   // The week people are ordering for right now. The window is forced open
@@ -213,7 +378,9 @@ async function main() {
     partialOrders?: boolean;
     title?: string;
   }) {
-    const existing = await prisma.menuCycle.findUnique({ where: { serviceWeekStart: opts.weekStart } });
+    const existing = await prisma.menuCycle.findUnique({
+      where: { serviceWeekStart: opts.weekStart },
+    });
     if (existing) return;
 
     const admin = users[0];
@@ -243,7 +410,10 @@ async function main() {
       });
 
       const offset = (dayIndex * 3) % allDishes.length;
-      const chosen = Array.from({ length: 4 }, (_, i) => allDishes[(offset + i * 3) % allDishes.length]);
+      const chosen = Array.from(
+        { length: 4 },
+        (_, i) => allDishes[(offset + i * 3) % allDishes.length],
+      );
       const unique = [...new Map(chosen.map((d) => [d.id, d])).values()];
 
       for (const [i, dish] of unique.entries()) {

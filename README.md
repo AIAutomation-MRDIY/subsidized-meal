@@ -37,12 +37,12 @@ Week W     Mon–Fri    food served                            (FULFILLED)
 Access is capability-based (`src/lib/rbac.ts`), not role-literal — adding a
 role later is a one-line change to that table.
 
-| Role | Can |
-| --- | --- |
+| Role              | Can                                                                                                             |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
 | **Administrator** | Restaurants, dishes and prices; plan and publish weekly menus; subsidy rules; users and roles; everything below |
-| **Analytics** | Demand dashboards, participation, top dishes, kitchen counts |
-| **Finance** | Revenue, subsidy cost, HitPay reconciliation, CSV exports; also sees analytics |
-| **Employee** | Browse the open menu and order for next week |
+| **Analytics**     | Demand dashboards, participation, top dishes, kitchen counts                                                    |
+| **Finance**       | Revenue, subsidy cost, HitPay reconciliation, CSV exports; also sees analytics                                  |
+| **Employee**      | Browse the open menu and order for next week                                                                    |
 
 Analytics and Finance can also place their own orders — they eat too.
 
@@ -118,12 +118,12 @@ Prisma's SQLite connector supports enums and `Json` but not scalar lists,
 `@db.Date`, `mode: 'insensitive'`, or `skipDuplicates`. Those four gaps are
 the whole difference, and they are handled in one place — `src/lib/db-compat.ts`:
 
-| Difference | Postgres | SQLite |
-| --- | --- | --- |
-| `Dish.tags` | `String[]` | comma-delimited `String`, via `encodeTags`/`decodeTags` |
-| Date-only columns | `@db.Date` | plain `DateTime` (already stored as UTC midnight) |
-| Case-insensitive search | `mode: 'insensitive'` | `LIKE`, already case-insensitive for ASCII |
-| `createMany` dedupe | `skipDuplicates: true` | omitted; callers de-duplicate first |
+| Difference              | Postgres               | SQLite                                                  |
+| ----------------------- | ---------------------- | ------------------------------------------------------- |
+| `Dish.tags`             | `String[]`             | comma-delimited `String`, via `encodeTags`/`decodeTags` |
+| Date-only columns       | `@db.Date`             | plain `DateTime` (already stored as UTC midnight)       |
+| Case-insensitive search | `mode: 'insensitive'`  | `LIKE`, already case-insensitive for ASCII              |
+| `createMany` dedupe     | `skipDuplicates: true` | omitted; callers de-duplicate first                     |
 
 If you add a scalar list to the schema, the SQLite generator prints a warning
 telling you to add a codec.
@@ -158,8 +158,8 @@ so you need a real Postgres database. The build fails with a clear message if
 1. **Create a Postgres database** — Supabase, Neon, Vercel Postgres, or any
    managed Postgres. Copy the connection string.
 
-   On **Supabase** it is *Project Settings → Database → Connection string →
-   URI*. Put it in `DATABASE_URL`. Supabase also shows a variable called
+   On **Supabase** it is _Project Settings → Database → Connection string →
+   URI_. Put it in `DATABASE_URL`. Supabase also shows a variable called
    `DIRECT_URL`; this app does not use that name, and setting only `DIRECT_URL`
    is the most common way to hit the "DATABASE_URL is not set" build error.
    If you pick the transaction pooler (port `6543`) rather than the session
@@ -167,15 +167,15 @@ so you need a real Postgres database. The build fails with a clear message if
 
 2. **Set environment variables** in Vercel → Settings → Environment Variables:
 
-   | Variable | Value |
-   | --- | --- |
-   | `DATABASE_URL` | your Postgres connection string |
-   | `AUTH_SECRET` | 48 random bytes (`openssl rand -base64 48`) |
-   | `APP_URL` | `https://<your-project>.vercel.app` |
-   | `HITPAY_API_KEY` | from the HitPay dashboard |
-   | `HITPAY_SALT` | from the HitPay dashboard |
-   | `HITPAY_MODE` | `sandbox` until you are ready for real money |
-   | `APP_TIMEZONE` | `Asia/Kuala_Lumpur` |
+   | Variable         | Value                                        |
+   | ---------------- | -------------------------------------------- |
+   | `DATABASE_URL`   | your Postgres connection string              |
+   | `AUTH_SECRET`    | 48 random bytes (`openssl rand -base64 48`)  |
+   | `APP_URL`        | `https://<your-project>.vercel.app`          |
+   | `HITPAY_API_KEY` | from the HitPay dashboard                    |
+   | `HITPAY_SALT`    | from the HitPay dashboard                    |
+   | `HITPAY_MODE`    | `sandbox` until you are ready for real money |
+   | `APP_TIMEZONE`   | `Asia/Kuala_Lumpur`                          |
 
    `APP_URL` must be the real public URL. HitPay rejects `localhost` outright
    (`"localhost not work for this field"`), so the webhook cannot be
@@ -188,10 +188,33 @@ so you need a real Postgres database. The build fails with a clear message if
    DATABASE_URL="<your postgres url>" npx prisma db push --schema prisma/schema.prisma
    ```
 
-4. **Seed, or create the first admin.** `npm run db:seed` loads demo data and
-   is **not** appropriate for production — it creates accounts with a shared
-   known password. For a real deployment, insert one admin user with a bcrypt
-   hash you generate yourself, then use the in-app **Users & roles** screen.
+4. **Load the sample data** (optional but recommended for a trial). Run this
+   from your machine, pointed at the hosted database:
+
+   ```bash
+   DATABASE_URL="<your postgres url>"    SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)"    npm run db:seed
+   ```
+
+   That gives you 4 restaurants, 16 dishes, 12 staff accounts across five
+   departments, three subsidy rules, and five service weeks — three completed
+   (so Analytics and Finance have charts), one open for ordering right now,
+   and one draft. The sign-in list is printed at the end.
+
+   `SEED_DEFAULT_PASSWORD` is **required** when the target is not localhost.
+   The demo default is published in this README, so seeding a public
+   deployment with it would leave a publicly known administrator account; the
+   seed refuses rather than let that happen.
+
+   The seed regenerates the Prisma client for whichever provider
+   `DATABASE_URL` points at, so switching between local SQLite and hosted
+   Postgres needs no extra step.
+
+   Re-running is mostly safe — users, restaurants and dishes are upserted and
+   existing service weeks are skipped — but **subsidy rules are deleted and
+   recreated** each time.
+
+   For a real rollout, skip the seed entirely: create one administrator, then
+   use the in-app **Users & roles** screen for everyone else.
 
 5. **Deploy.** `npm run build` runs `prisma generate` against the Postgres
    schema automatically.
@@ -360,7 +383,7 @@ src/app/api/
 - **The payment gateway is not named in employee-facing screens.** Staff see
   "Pay RM 12.50"; Finance sees the HitPay references it needs to reconcile.
 - **Employees never see the company's contribution.** Menu rows show the price
-  *that employee* pays (`employeePriceFor()`), and the order summary, order
+  _that employee_ pays (`employeePriceFor()`), and the order summary, order
   list and receipt omit gross and subsidy entirely. Showing a list price
   alongside "you pay" would leak the subsidy by subtraction, so the list price
   is not sent to the browser at all. Everything behind `finance:view` still
