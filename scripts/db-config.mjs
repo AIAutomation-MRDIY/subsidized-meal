@@ -117,14 +117,27 @@ export function writeSqliteSchema() {
  */
 function assertNotSqliteInProduction(db) {
   const hosted = process.env.VERCEL || process.env.NETLIFY || process.env.RENDER;
-  if (db.provider === 'sqlite' && hosted) {
-    throw new Error(
-      'DATABASE_URL is not set to a Postgres database.\n' +
-        'This app falls back to SQLite locally, but SQLite cannot be used on a\n' +
-        'serverless host - the filesystem is ephemeral and per-invocation.\n' +
-        'Set DATABASE_URL to a Postgres connection string in your project settings.',
-    );
-  }
+  if (db.provider !== 'sqlite' || !hosted) return;
+
+  // Easy mistake: Supabase hands you DIRECT_URL / POSTGRES_URL and it is
+  // tempting to paste it into whichever box is open. Prisma reads
+  // DATABASE_URL, so say so by name rather than just failing.
+  const fileEnv = readEnvFile();
+  const strays = ['DIRECT_URL', 'POSTGRES_URL', 'POSTGRES_PRISMA_URL', 'SUPABASE_DB_URL'].filter(
+    (k) => process.env[k] || fileEnv[k],
+  );
+  const hint = strays.length
+    ? `\n\nFound ${strays.join(', ')} but no DATABASE_URL. Prisma reads DATABASE_URL -\n` +
+      'rename it, or copy the same connection string into DATABASE_URL.'
+    : '';
+
+  throw new Error(
+    'DATABASE_URL is not set to a Postgres database.\n' +
+      'This app falls back to SQLite locally, but SQLite cannot be used on a\n' +
+      'serverless host - the filesystem is ephemeral and per-invocation.\n' +
+      'Set DATABASE_URL to a Postgres connection string in your project settings.' +
+      hint,
+  );
 }
 
 /** Prepare whatever the chosen provider needs and return the schema path. */

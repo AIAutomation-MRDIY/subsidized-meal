@@ -155,8 +155,15 @@ follow it with `npm run db:seed`.
 so you need a real Postgres database. The build fails with a clear message if
 `DATABASE_URL` is missing, rather than deploying something that breaks later.
 
-1. **Create a Postgres database** — Vercel Postgres, Neon, Supabase, or any
+1. **Create a Postgres database** — Supabase, Neon, Vercel Postgres, or any
    managed Postgres. Copy the connection string.
+
+   On **Supabase** it is *Project Settings → Database → Connection string →
+   URI*. Put it in `DATABASE_URL`. Supabase also shows a variable called
+   `DIRECT_URL`; this app does not use that name, and setting only `DIRECT_URL`
+   is the most common way to hit the "DATABASE_URL is not set" build error.
+   If you pick the transaction pooler (port `6543`) rather than the session
+   pooler (`5432`), append `?pgbouncer=true` to the URL.
 
 2. **Set environment variables** in Vercel → Settings → Environment Variables:
 
