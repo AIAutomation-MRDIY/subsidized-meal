@@ -1,0 +1,259 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+
+import { ActionForm, InlineSubmit } from '@/components/action-form';
+import { Dialog } from '@/components/dialog';
+import { DayTabs, type DayTab } from '@/components/day-tabs';
+import { formatSen } from '@/lib/money';
+
+import { addMenuItem, removeMenuItem, updateMenuItem } from '../actions';
+
+export type DishOption = {
+  id: string;
+  name: string;
+  priceSen: number;
+  restaurantName: string;
+};
+
+export type PlannerItem = {
+  id: string;
+  dishId: string;
+  dishName: string;
+  restaurantName: string;
+  priceSen: number;
+  catalogPriceSen: number;
+  capacity: number | null;
+  ordered: number;
+};
+
+/**
+ * One day of the weekly planner. Only this day's items are fetched by the
+ * server - switching tabs is a fresh query for that day alone.
+ */
+export function DayPlanner({
+  tabs,
+  activeDay,
+  dayHeading,
+  menuDayId,
+  items,
+  dishes,
+  editable,
+}: {
+  tabs: DayTab[];
+  activeDay: string;
+  dayHeading: string;
+  menuDayId: string;
+  items: PlannerItem[];
+  dishes: DishOption[];
+  editable: boolean;
+}) {
+  const dayValue = items.reduce((sum, i) => sum + i.priceSen, 0);
+
+  return (
+    <div className="space-y-4">
+      <DayTabs tabs={tabs} active={activeDay} />
+
+      <section className="card overflow-hidden">
+        <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3">
+          <h2 className="text-sm font-semibold text-slate-900">{dayHeading}</h2>
+          <span className="text-xs text-slate-500">
+            {items.length} dish{items.length === 1 ? '' : 'es'} · menu value {formatSen(dayValue)}
+          </span>
+        </header>
+
+        {items.length === 0 ? (
+          <p className="px-5 py-12 text-center text-sm text-slate-400">
+            No dishes planned for this day.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Dish</th>
+                  <th>Restaurant</th>
+                  <th className="num">Price</th>
+                  <th>Capacity</th>
+                  {editable ? <th /> : null}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const full = item.capacity != null && item.ordered >= item.capacity;
+                  return (
+                    <tr key={item.id}>
+                      <td className="font-medium text-slate-900">{item.dishName}</td>
+                      <td className="text-slate-600">{item.restaurantName}</td>
+                      <td className="num">
+                        <span className="font-medium text-slate-900">{formatSen(item.priceSen)}</span>
+                        {item.priceSen !== item.catalogPriceSen ? (
+                          <div className="text-[11px] text-amber-600">
+                            catalogue {formatSen(item.catalogPriceSen)}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        {item.capacity == null ? (
+                          <span className="text-slate-400">Unlimited</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
+                              <div
+                                className={`h-full rounded-full ${full ? 'bg-red-500' : 'bg-brand-500'}`}
+                                style={{
+                                  width: `${Math.min(100, (item.ordered / item.capacity) * 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <span className={`text-xs tabular-nums ${full ? 'text-red-600' : 'text-slate-500'}`}>
+                              {item.ordered}/{item.capacity}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      {editable ? (
+                        <td>
+                          <div className="flex justify-end gap-1.5">
+                            <EditItemDialog item={item} />
+                            <form action={removeMenuItem}>
+                              <input type="hidden" name="id" value={item.id} />
+                              <InlineSubmit label="Remove" variant="danger" />
+                            </form>
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {editable ? (
+          <div className="border-t border-slate-200 bg-slate-50/60 p-4">
+            <AddDishForm
+              menuDayId={menuDayId}
+              dishes={dishes}
+              existing={items.map((i) => i.dishId)}
+            />
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function AddDishForm({
+  menuDayId,
+  dishes,
+  existing,
+}: {
+  menuDayId: string;
+  dishes: DishOption[];
+  existing: string[];
+}) {
+  const [dishId, setDishId] = useState('');
+  const taken = useMemo(() => new Set(existing), [existing]);
+  const selected = dishes.find((d) => d.id === dishId);
+
+  return (
+    <ActionForm action={addMenuItem} submitLabel="Add to this day" className="space-y-0">
+      <input type="hidden" name="menuDayId" value={menuDayId} />
+
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_7rem]">
+        <div>
+          <label className="label text-xs" htmlFor={`dish-${menuDayId}`}>
+            Dish
+          </label>
+          <select
+            id={`dish-${menuDayId}`}
+            name="dishId"
+            required
+            value={dishId}
+            onChange={(e) => setDishId(e.target.value)}
+            className="input"
+          >
+            <option value="" disabled>
+              Choose a dish…
+            </option>
+            {dishes.map((d) => (
+              <option key={d.id} value={d.id} disabled={taken.has(d.id)}>
+                {d.name} — {d.restaurantName} ({formatSen(d.priceSen)})
+                {taken.has(d.id) ? ' · already added' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label text-xs" htmlFor={`price-${menuDayId}`}>
+            Price (RM)
+          </label>
+          <input
+            id={`price-${menuDayId}`}
+            name="price"
+            inputMode="decimal"
+            className="input"
+            placeholder={selected ? (selected.priceSen / 100).toFixed(2) : 'catalogue'}
+          />
+        </div>
+        <div>
+          <label className="label text-xs" htmlFor={`cap-${menuDayId}`}>
+            Qty limit
+          </label>
+          <input
+            id={`cap-${menuDayId}`}
+            name="capacity"
+            inputMode="numeric"
+            className="input"
+            placeholder="none"
+          />
+        </div>
+      </div>
+    </ActionForm>
+  );
+}
+
+function EditItemDialog({ item }: { item: PlannerItem }) {
+  return (
+    <Dialog
+      title={`Edit ${item.dishName}`}
+      width="max-w-sm"
+      trigger={(open) => (
+        <button type="button" className="btn-secondary btn-sm" onClick={open}>
+          Edit
+        </button>
+      )}
+    >
+      {() => (
+        <ActionForm action={updateMenuItem} submitLabel="Save" resetOnSuccess={false} className="space-y-3">
+          <input type="hidden" name="id" value={item.id} />
+          <div>
+            <label className="label">Price for this week (RM)</label>
+            <input
+              name="price"
+              required
+              inputMode="decimal"
+              defaultValue={(item.priceSen / 100).toFixed(2)}
+              className="input"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Catalogue price is {formatSen(item.catalogPriceSen)}.
+            </p>
+          </div>
+          <div>
+            <label className="label">Daily capacity</label>
+            <input
+              name="capacity"
+              inputMode="numeric"
+              defaultValue={item.capacity ?? ''}
+              className="input"
+              placeholder="Blank = unlimited"
+            />
+          </div>
+        </ActionForm>
+      )}
+    </Dialog>
+  );
+}

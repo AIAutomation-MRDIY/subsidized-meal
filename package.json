@@ -1,0 +1,47 @@
+{
+  "name": "mrdiy-food-ordering",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node scripts/prisma.mjs generate && next dev",
+    "build": "node scripts/prisma.mjs generate && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx tests/logic.ts",
+    "postinstall": "node scripts/prisma.mjs generate",
+    "db:generate": "node scripts/prisma.mjs generate",
+    "db:push": "node scripts/prisma.mjs db push",
+    "db:migrate": "node scripts/prisma.mjs migrate dev",
+    "db:seed": "node scripts/seed.mjs",
+    "db:studio": "node scripts/prisma.mjs studio",
+    "db:reset": "node scripts/reset.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "bcryptjs": "^2.4.3",
+    "date-fns": "^4.1.0",
+    "jose": "^5.9.6",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.15.0",
+    "server-only": "^0.0.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.1",
+    "prisma": "^6.2.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  },
+  "optionalDependencies": {
+    "ldapts": "^7.3.1"
+  }
+}

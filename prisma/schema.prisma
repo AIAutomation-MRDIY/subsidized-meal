@@ -1,0 +1,379 @@
+// MR DIY Food Ordering System
+//
+// Money convention: every monetary column is an INTEGER number of *sen*
+// (1 MYR = 100 sen). Integers avoid float drift and Decimal serialisation
+// headaches across the server/client boundary. Format with lib/money.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  ANALYTICS
+  FINANCE
+  USER
+}
+
+enum AuthProvider {
+  LOCAL
+  LDAP
+  OIDC
+}
+
+/// DRAFT      - admin is still planning; invisible to users
+/// PUBLISHED  - menu is locked-in and the ordering window is open
+/// CLOSED     - cutoff passed; no further orders, kitchen counts are final
+/// FULFILLED  - service week finished
+/// CANCELLED  - cycle abandoned; paid orders must be refunded
+enum CycleStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  FULFILLED
+  CANCELLED
+}
+
+enum MealSlot {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+/// CART             - user is still building the order, nothing committed
+/// AWAITING_PAYMENT - HitPay request created, waiting for webhook
+/// PAID             - payment confirmed
+/// CANCELLED        - user or admin cancelled before payment
+/// REFUNDED         - money returned after payment
+enum OrderStatus {
+  CART
+  AWAITING_PAYMENT
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+/// PERCENTAGE     - company pays `value` percent of the line price
+/// FIXED_PER_ITEM - company pays up to `value` sen off each item
+/// FIXED_PER_DAY  - company pays up to `value` sen across all items on one day
+enum SubsidyType {
+  PERCENTAGE
+  FIXED_PER_ITEM
+  FIXED_PER_DAY
+}
+
+enum SubsidyScope {
+  ALL
+  DEPARTMENT
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  name         String
+  staffId      String?      @unique
+  department   String?
+  role         Role         @default(USER)
+  /// Null for LDAP/OIDC accounts - those never hold a local credential.
+  passwordHash String?
+  authProvider AuthProvider @default(LOCAL)
+  /// External subject id from LDAP (dn) or OIDC (sub).
+  externalId   String?
+  active       Boolean      @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  orders       Order[]
+  createdCycles MenuCycle[] @relation("CycleCreatedBy")
+  auditLogs    AuditLog[]
+
+  @@index([role])
+  @@index([department])
+  @@index([authProvider, externalId])
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue - owned by ADMIN
+// ---------------------------------------------------------------------------
+
+model Restaurant {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  cuisine     String?
+  contactName String?
+  contactPhone String?
+  address     String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dishes      Dish[]
+
+  @@index([active])
+}
+
+model Dish {
+  id           String   @id @default(cuid())
+  restaurantId String
+  name         String
+  description  String?
+  /// Catalogue list price in sen. A MenuItem may override it for one cycle.
+  priceSen     Int
+  category     String?
+  imageUrl     String?
+  /// Free-form tags: "halal", "vegetarian", "contains-nuts", ...
+  tags         String[] @default([])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItems    MenuItem[]
+
+  @@unique([restaurantId, name])
+  @@index([active])
+  @@index([category])
+}
+
+// ---------------------------------------------------------------------------
+// Weekly cycle
+//
+// Timeline for a cycle whose service week starts Monday W:
+//   W-2 (any time)  admin drafts the menu
+//   W-1 Monday      publish -> ordering opens
+//   W-1 Wednesday   cutoff  -> ordering closes, counts sent to restaurants
+//   W   Mon..Fri    food served
+// ---------------------------------------------------------------------------
+
+model MenuCycle {
+  id               String      @id @default(cuid())
+  /// Monday 00:00 of the week the food is *served*. Uniquely identifies a cycle.
+  serviceWeekStart DateTime    @unique @db.Date
+  title            String?
+  status           CycleStatus @default(DRAFT)
+
+  /// Ordering opens (defaults to Monday 00:00 of the week before service).
+  orderOpenAt      DateTime
+  /// Ordering closes (defaults to Wednesday 17:00 of the week before service).
+  orderCutoffAt    DateTime
+
+  publishedAt      DateTime?
+  closedAt         DateTime?
+  notes            String?
+
+  createdById      String?
+  createdBy        User?       @relation("CycleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  days             MenuDay[]
+  orders           Order[]
+
+  @@index([status])
+  @@index([orderOpenAt, orderCutoffAt])
+}
+
+model MenuDay {
+  id          String   @id @default(cuid())
+  cycleId     String
+  /// Calendar date within the service week.
+  serviceDate DateTime @db.Date
+  slot        MealSlot @default(LUNCH)
+  note        String?
+
+  cycle       MenuCycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  items       MenuItem[]
+
+  @@unique([cycleId, serviceDate, slot])
+  @@index([serviceDate])
+}
+
+model MenuItem {
+  id          String  @id @default(cuid())
+  menuDayId   String
+  dishId      String
+  /// Price charged for this cycle, in sen. Snapshotted from Dish at add time
+  /// so later catalogue edits never change a published menu.
+  priceSen    Int
+  /// Max portions the restaurant can supply that day. Null = unlimited.
+  capacity    Int?
+  sortOrder   Int     @default(0)
+
+  menuDay     MenuDay    @relation(fields: [menuDayId], references: [id], onDelete: Cascade)
+  dish        Dish       @relation(fields: [dishId], references: [id], onDelete: Restrict)
+  orderItems  OrderItem[]
+
+  @@unique([menuDayId, dishId])
+  @@index([dishId])
+}
+
+// ---------------------------------------------------------------------------
+// Subsidies - the company's contribution, applied before the user pays
+// ---------------------------------------------------------------------------
+
+model SubsidyRule {
+  id            String       @id @default(cuid())
+  name          String
+  type          SubsidyType
+  /// PERCENTAGE -> whole percent (e.g. 50). Others -> sen.
+  value         Int
+  /// Optional ceiling in sen. For PERCENTAGE/FIXED_PER_ITEM it caps the
+  /// per-item subsidy; for FIXED_PER_DAY it is ignored (value is the cap).
+  capSen        Int?
+  scope         SubsidyScope @default(ALL)
+  /// Required when scope = DEPARTMENT.
+  department    String?
+  priority      Int          @default(0)
+  active        Boolean      @default(true)
+  effectiveFrom DateTime?    @db.Date
+  effectiveTo   DateTime?    @db.Date
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([active, scope])
+}
+
+// ---------------------------------------------------------------------------
+// Orders
+//
+// One Order per (user, cycle). It starts as a CART and is checked out once.
+// ---------------------------------------------------------------------------
+
+model Order {
+  id             String      @id @default(cuid())
+  reference      String      @unique
+  userId         String
+  cycleId        String
+  status         OrderStatus @default(CART)
+
+  /// Sum of line grossSen (what the food costs before company help).
+  grossSen       Int         @default(0)
+  /// Sum of line subsidySen (what the company pays).
+  subsidySen     Int         @default(0)
+  /// grossSen - subsidySen. What the employee pays through HitPay.
+  netSen         Int         @default(0)
+
+  /// Snapshot of the subsidy rules applied at checkout, for audit.
+  subsidySnapshot Json?
+
+  submittedAt    DateTime?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  cancelReason   String?
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cycle          MenuCycle   @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  items          OrderItem[]
+  payments       Payment[]
+
+  @@unique([userId, cycleId])
+  @@index([status])
+  @@index([cycleId, status])
+  @@index([paidAt])
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  menuItemId    String
+  quantity      Int
+
+  /// Price snapshot at the time the line was added.
+  unitPriceSen  Int
+  /// unitPriceSen * quantity
+  grossSen      Int
+  /// Company contribution for the whole line.
+  subsidySen    Int      @default(0)
+  /// grossSen - subsidySen
+  netSen        Int      @default(0)
+
+  /// Denormalised for reporting stability if a menu item is later removed.
+  serviceDate   DateTime @db.Date
+  dishName      String
+  restaurantName String
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem      MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  @@unique([orderId, menuItemId])
+  @@index([serviceDate])
+  @@index([menuItemId])
+}
+
+// ---------------------------------------------------------------------------
+// Payments (HitPay)
+// ---------------------------------------------------------------------------
+
+model Payment {
+  id                String        @id @default(cuid())
+  orderId           String
+  provider          String        @default("hitpay")
+  /// HitPay payment_request id.
+  requestId         String?       @unique
+  /// HitPay payment id, present once the charge settles.
+  paymentId         String?
+  status            PaymentStatus @default(PENDING)
+  amountSen         Int
+  currency          String        @default("MYR")
+  checkoutUrl       String?
+  paymentMethod     String?
+  /// Raw webhook body, kept for reconciliation and dispute handling.
+  rawPayload        Json?
+  failureReason     String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  order             Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+  @@index([paymentId])
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
