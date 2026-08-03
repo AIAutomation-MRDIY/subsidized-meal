@@ -18,7 +18,13 @@ const db = prepareSchema();
 function run(cmd, args, extraEnv = {}) {
   return spawnSync(process.platform === 'win32' ? `${cmd}.cmd` : cmd, args, {
     stdio: 'inherit',
-    env: { ...process.env, DATABASE_URL: db.url, DATABASE_PROVIDER: db.provider, ...extraEnv },
+    env: {
+      ...process.env,
+      DATABASE_URL: db.url,
+      DIRECT_URL: process.env.DIRECT_URL || db.url,
+      DATABASE_PROVIDER: db.provider,
+      ...extraEnv,
+    },
     shell: process.platform === 'win32',
   });
 }

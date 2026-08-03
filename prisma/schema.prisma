@@ -10,7 +10,13 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Queries. On Supabase/Neon this is the transaction pooler (pgbouncer).
+  url       = env("DATABASE_URL")
+  // Schema changes. `db push` and migrations cannot run through a
+  // transaction-mode pooler, so they need a direct/session connection.
+  // scripts/prisma.mjs defaults this to DATABASE_URL when it is unset, so a
+  // plain unpooled Postgres still works with only one variable.
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------

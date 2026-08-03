@@ -29,7 +29,7 @@ const result = spawnSync(
   ['prisma', ...args, '--schema', db.schema],
   {
     stdio: 'inherit',
-    env: { ...process.env, DATABASE_URL: db.url },
+    env: { ...process.env, DATABASE_URL: db.url, DIRECT_URL: process.env.DIRECT_URL || db.url },
     shell: process.platform === 'win32',
   },
 );

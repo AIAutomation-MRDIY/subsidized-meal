@@ -73,6 +73,25 @@ export function resolveDatabase() {
 }
 
 /**
+ * Remove the `directUrl` line from a datasource block, along with the comment
+ * lines immediately above it. Done line-by-line rather than with a multiline
+ * regex, which is easier to read and to get right.
+ */
+function dropDirectUrl(schema) {
+  const lines = schema.split('\n');
+  const drop = new Set();
+
+  lines.forEach((line, i) => {
+    if (!/^\s*directUrl\s*=/.test(line)) return;
+    drop.add(i);
+    // Walk back over the comment lines that document it.
+    for (let j = i - 1; j >= 0 && /^\s*\/\//.test(lines[j]); j--) drop.add(j);
+  });
+
+  return lines.filter((_, i) => !drop.has(i)).join('\n');
+}
+
+/**
  * Rewrite the Postgres schema into a SQLite-compatible one.
  *
  * SQLite in Prisma supports enums and Json, but not scalar lists or the
@@ -90,6 +109,10 @@ export function writeSqliteSchema() {
     .replace(/\s+@db\.Date\b/g, '')
     // 3. No scalar lists. Tags become a delimited string - see encodeTags().
     .replace(/String\[\]\s*@default\(\[\]\)/g, 'String  @default("")');
+
+  // 4. directUrl is a pooled-Postgres concern; SQLite has a single file.
+  //    Drop the line and the comment block that explains it.
+  out = dropDirectUrl(out);
 
   // Relations are lists too (`Dish[]`), so only flag lists of *scalar* types -
   // those are the ones SQLite cannot represent.

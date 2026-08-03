@@ -35,7 +35,11 @@ if (db.provider === 'sqlite') {
   const push = spawnSync(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
     ['prisma', 'db', 'push', '--schema', db.schema, '--skip-generate'],
-    { stdio: 'inherit', env: { ...process.env, DATABASE_URL: db.url }, shell: process.platform === 'win32' },
+    {
+      stdio: 'inherit',
+      env: { ...process.env, DATABASE_URL: db.url, DIRECT_URL: process.env.DIRECT_URL || db.url },
+      shell: process.platform === 'win32',
+    },
   );
   process.exit(push.status ?? 1);
 }
@@ -44,6 +48,10 @@ console.log('  ! resetting the Postgres database - prisma will ask you to confir
 const reset = spawnSync(
   process.platform === 'win32' ? 'npx.cmd' : 'npx',
   ['prisma', 'migrate', 'reset', '--schema', db.schema],
-  { stdio: 'inherit', env: { ...process.env, DATABASE_URL: db.url }, shell: process.platform === 'win32' },
+  {
+    stdio: 'inherit',
+    env: { ...process.env, DATABASE_URL: db.url, DIRECT_URL: process.env.DIRECT_URL || db.url },
+    shell: process.platform === 'win32',
+  },
 );
 process.exit(reset.status ?? 1);

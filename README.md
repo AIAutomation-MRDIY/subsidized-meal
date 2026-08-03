@@ -158,18 +158,24 @@ so you need a real Postgres database. The build fails with a clear message if
 1. **Create a Postgres database** — Supabase, Neon, Vercel Postgres, or any
    managed Postgres. Copy the connection string.
 
-   On **Supabase** it is _Project Settings → Database → Connection string →
-   URI_. Put it in `DATABASE_URL`. Supabase also shows a variable called
-   `DIRECT_URL`; this app does not use that name, and setting only `DIRECT_URL`
-   is the most common way to hit the "DATABASE_URL is not set" build error.
-   If you pick the transaction pooler (port `6543`) rather than the session
-   pooler (`5432`), append `?pgbouncer=true` to the URL.
+   On **Supabase**, _Project Settings → Database → Connection string_ gives
+   you two. Use both:
+
+   - `DATABASE_URL` — the **transaction pooler** (`:6543`), with
+     `?pgbouncer=true` appended. This is what the app queries through.
+   - `DIRECT_URL` — the **session pooler** (`:5432`). Prisma cannot run
+     `db push` or migrations through a transaction-mode pooler, so schema
+     changes go down this one.
+
+   On plain unpooled Postgres, `DATABASE_URL` alone is enough; `DIRECT_URL`
+   falls back to it.
 
 2. **Set environment variables** in Vercel → Settings → Environment Variables:
 
    | Variable         | Value                                        |
    | ---------------- | -------------------------------------------- |
-   | `DATABASE_URL`   | your Postgres connection string              |
+   | `DATABASE_URL`   | pooled Postgres URL (`:6543?pgbouncer=true`) |
+   | `DIRECT_URL`     | direct/session URL (`:5432`), pooled hosts   |
    | `AUTH_SECRET`    | 48 random bytes (`openssl rand -base64 48`)  |
    | `APP_URL`        | `https://<your-project>.vercel.app`          |
    | `HITPAY_API_KEY` | from the HitPay dashboard                    |
@@ -185,14 +191,15 @@ so you need a real Postgres database. The build fails with a clear message if
    machine, pointed at the production database:
 
    ```bash
-   DATABASE_URL="<your postgres url>" npx prisma db push --schema prisma/schema.prisma
+   DATABASE_URL="<pooled url>" DIRECT_URL="<direct url>" npm run db:push
    ```
 
 4. **Load the sample data** (optional but recommended for a trial). Run this
    from your machine, pointed at the hosted database:
 
    ```bash
-   DATABASE_URL="<your postgres url>"    SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)"    npm run db:seed
+   DATABASE_URL="<pooled url>" DIRECT_URL="<direct url>" \
+   SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)" npm run db:seed
    ```
 
    That gives you 4 restaurants, 16 dishes, 12 staff accounts across five
