@@ -62,8 +62,11 @@ export default async function CycleDetailPage({
     prisma.order.count({
       where: { cycleId: id, status: { in: ['AWAITING_PAYMENT', 'PAID'] } },
     }),
-    prisma.menuCycle.findUnique({
-      where: { serviceWeekStart: addWeeks(dateOnly(cycle.serviceWeekStart), -1) },
+    prisma.menuCycle.findFirst({
+      where: {
+        serviceWeekStart: addWeeks(dateOnly(cycle.serviceWeekStart), -1),
+        status: { not: 'CANCELLED' },
+      },
       select: { id: true },
     }),
   ]);
@@ -192,17 +195,17 @@ export default async function CycleDetailPage({
   // The picker is only needed while the menu is still editable.
   const dishOptions: DishOption[] = editable
     ? (
-        await prisma.dish.findMany({
-          where: { active: true, restaurant: { active: true } },
-          orderBy: [{ restaurant: { name: 'asc' } }, { name: 'asc' }],
-          select: { id: true, name: true, priceSen: true, restaurant: { select: { name: true } } },
-        })
-      ).map((d) => ({
-        id: d.id,
-        name: d.name,
-        priceSen: d.priceSen,
-        restaurantName: d.restaurant.name,
-      }))
+      await prisma.dish.findMany({
+        where: { active: true, restaurant: { active: true } },
+        orderBy: [{ restaurant: { name: 'asc' } }, { name: 'asc' }],
+        select: { id: true, name: true, priceSen: true, restaurant: { select: { name: true } } },
+      })
+    ).map((d) => ({
+      id: d.id,
+      name: d.name,
+      priceSen: d.priceSen,
+      restaurantName: d.restaurant.name,
+    }))
     : [];
 
   return (

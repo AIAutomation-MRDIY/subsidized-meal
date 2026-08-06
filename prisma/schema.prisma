@@ -175,8 +175,12 @@ model Dish {
 
 model MenuCycle {
   id               String      @id @default(cuid())
-  /// Monday 00:00 of the week the food is *served*. Uniquely identifies a cycle.
-  serviceWeekStart DateTime    @unique @db.Date
+  /// Monday 00:00 of the week the food is *served*. Identifies a cycle -
+  /// but no longer a hard unique constraint. A CANCELLED cycle keeps its
+  /// row (audit trail, refund note) without permanently occupying the
+  /// week; only one non-cancelled cycle may exist per week, enforced in
+  /// createCycle rather than the database.
+  serviceWeekStart DateTime    @db.Date
   title            String?
   status           CycleStatus @default(DRAFT)
 
@@ -200,6 +204,7 @@ model MenuCycle {
 
   @@index([status])
   @@index([orderOpenAt, orderCutoffAt])
+  @@index([serviceWeekStart])
 }
 
 model MenuDay {

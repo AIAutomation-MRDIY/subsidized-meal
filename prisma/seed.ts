@@ -378,7 +378,7 @@ async function main() {
     partialOrders?: boolean;
     title?: string;
   }) {
-    const existing = await prisma.menuCycle.findUnique({
+    const existing = await prisma.menuCycle.findFirst({
       where: { serviceWeekStart: opts.weekStart },
     });
     if (existing) return;

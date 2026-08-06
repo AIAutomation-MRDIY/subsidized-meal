@@ -32,7 +32,9 @@ export default async function CyclesPage() {
 
   const suggested = nextPlannableWeekStart();
   const suggestedKey = toDateKey(suggested);
-  const alreadyPlanned = cycles.some((c) => toDateKey(c.serviceWeekStart) === suggestedKey);
+  const alreadyPlanned = cycles.some(
+    (c) => toDateKey(c.serviceWeekStart) === suggestedKey && c.status !== 'CANCELLED',
+  );
 
   const paidTotals = await prisma.order.groupBy({
     by: ['cycleId'],
