@@ -42,8 +42,8 @@ export default async function MenuPage({
           hint={
             upcoming
               ? `The menu for ${formatWeekRange(upcoming.serviceWeekStart)} opens on ${formatDateTime(
-                  upcoming.orderOpenAt,
-                )}.`
+                upcoming.orderOpenAt,
+              )}.`
               : 'Ordering opens on Monday and closes Wednesday at 5:00 pm for the following week.'
           }
           action={
@@ -58,12 +58,17 @@ export default async function MenuPage({
 
   // The cart is created on first add, not on first view, so browsing does
   // not litter the table with empty orders.
-  const order = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId: user.id, cycleId: cycle.id } },
+  const orders = await prisma.order.findMany({
+    where: { userId: user.id, cycleId: cycle.id },
     include: { items: { orderBy: [{ serviceDate: 'asc' }, { dishName: 'asc' }] } },
+    orderBy: { createdAt: 'asc' },
   });
 
-  const submitted = Boolean(order && order.status !== 'CART');
+  const cart = orders.find((o) => o.status === 'CART');
+  const settledOrders = orders.filter((o) => o.status !== 'CART');
+  const orderItems = orders.flatMap((o) =>
+    o.items.map((item) => ({ ...item, orderStatus: o.status, orderReference: o.reference })),
+  );
 
   // Day tabs: dates and per-day dish counts only - not the dishes themselves.
   const days = await prisma.menuDay.findMany({
@@ -72,12 +77,39 @@ export default async function MenuPage({
     select: { id: true, serviceDate: true, _count: { select: { items: true } } },
   });
 
+
+  if (days.length === 0) {
+    return (
+      <>
+        <PageHeader
+          title={`Menu for ${formatWeekRange(cycle.serviceWeekStart)}`}
+          action={
+            <Link href="/orders" className="btn-secondary">
+              My orders
+            </Link>
+          }
+        />
+        <EmptyState title="No days have been set up for this week yet" />
+      </>
+    );
+  }
+
+  const chosenMenuItemIds = new Set(orderItems.map((item) => item.menuItemId));
+  const lockedDayKeys = new Set(
+    orderItems.filter((item) => item.orderStatus !== 'CART').map((item) => toDateKey(item.serviceDate)),
+  );
+  const chosenDayKeys = new Set(orderItems.map((item) => toDateKey(item.serviceDate)));
+
+  const allOrderableDaysLocked = days
+    .filter((d) => d._count.items > 0)
+    .every((d) => lockedDayKeys.has(toDateKey(d.serviceDate)));
+
   const header = (
     <PageHeader
       title={`Menu for ${formatWeekRange(cycle.serviceWeekStart)}`}
       subtitle={
         <span className="flex flex-wrap items-center gap-2">
-          {submitted ? (
+          {allOrderableDaysLocked ? (
             <span className="badge bg-emerald-100 text-emerald-800">Order placed</span>
           ) : (
             <>
@@ -98,33 +130,21 @@ export default async function MenuPage({
     />
   );
 
-  if (days.length === 0) {
-    return (
-      <>
-        {header}
-        <EmptyState title="No days have been set up for this week yet" />
-      </>
-    );
-  }
-
-  const orderItems = order?.items ?? [];
-  const chosenDays = new Set(orderItems.map((item) => toDateKey(item.serviceDate)));
-  const chosenMenuItemIds = new Set(orderItems.map((item) => item.menuItemId));
-
   // Honour ?day= when it names a real day, otherwise open the first day that
   // has dishes - or, once submitted, the first day they actually ordered.
   const fallback =
-    (submitted ? days.find((d) => chosenDays.has(toDateKey(d.serviceDate))) : undefined) ??
+    days.find((d) => d._count.items > 0 && !lockedDayKeys.has(toDateKey(d.serviceDate))) ??
     days.find((d) => d._count.items > 0) ??
     days[0];
   const activeDay = days.find((d) => toDateKey(d.serviceDate) === requestedDay) ?? fallback;
   const activeDayKey = toDateKey(activeDay.serviceDate);
+  const activeDayLocked = lockedDayKeys.has(activeDayKey);
 
   const tabs: DayTab[] = days.map((d) => ({
     key: toDateKey(d.serviceDate),
     label: formatDate(d.serviceDate, 'weekday').slice(0, 3),
     sublabel: formatDate(d.serviceDate),
-    check: chosenDays.has(toDateKey(d.serviceDate)),
+    check: chosenDayKeys.has(toDateKey(d.serviceDate)),
     muted: d._count.items === 0,
   }));
 
@@ -136,12 +156,12 @@ export default async function MenuPage({
   });
 
   // Stock only matters while they can still change their mind.
-  const remaining = submitted
+  const remaining = activeDayLocked
     ? new Map<string, number | null>()
     : await remainingCapacityMap(
-        menuItems.map((i) => ({ id: i.id, capacity: i.capacity })),
-        order?.id,
-      );
+      menuItems.map((i) => ({ id: i.id, capacity: i.capacity })),
+      cart?.id,
+    );
 
   // Employees see their own price, never the list price or the company's
   // contribution. Exact per dish because it is one meal per service day.
@@ -164,13 +184,16 @@ export default async function MenuPage({
     dayLabel: `${formatDate(item.serviceDate, 'weekday')} · ${formatDate(item.serviceDate)}`,
     dishName: item.dishName,
     netSen: item.netSen,
+    locked: item.orderStatus !== 'CART',
   }));
+
+  const awaitingPayment = settledOrders.some((o) => o.status === 'AWAITING_PAYMENT');
 
   return (
     <>
       {header}
 
-      {submitted && order?.status === 'AWAITING_PAYMENT' ? (
+      {awaitingPayment ? (
         <div className="mb-4">
           <Alert tone="warning">
             We are waiting for your payment to be confirmed. Refresh shortly, or open the receipt to
@@ -187,10 +210,11 @@ export default async function MenuPage({
         dishes={dishes}
         cartLines={cartLines}
         notes={cycle.notes}
-        totalSen={order?.netSen ?? 0}
-        readOnly={submitted}
-        orderReference={order?.reference}
-        orderStatus={order?.status}
+        totalSen={cart?.netSen ?? 0}
+        readOnly={activeDayLocked}
+        orderReference={cart?.reference}
+        orderStatus={cart?.status}
+        hasSettledOrders={settledOrders.length > 0}
       />
     </>
   );

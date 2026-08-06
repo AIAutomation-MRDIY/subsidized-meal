@@ -42,10 +42,10 @@ export async function clearCart(formData: FormData): Promise<void> {
   const cycleId = String(formData.get('cycleId') ?? '');
   if (!cycleId) return;
 
-  const order = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId: user.id, cycleId } },
-  });
-  if (!order || order.status !== 'CART') return;
+  const order = await prisma.order.findFirst({
+    where: { userId: user.id, cycleId, status: 'CART' } },
+  );
+  if (!order) return;
 
   await prisma.orderItem.deleteMany({ where: { orderId: order.id } });
   await repriceOrder(order.id);
@@ -64,8 +64,8 @@ export async function checkout(_prev: ActionState, formData: FormData): Promise<
   const cycleId = String(formData.get('cycleId') ?? '');
   if (!cycleId) return { error: 'Missing week.' };
 
-  const order = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId: user.id, cycleId } },
+  const order = await prisma.order.findFirst({
+    where:  { userId: user.id, cycleId, status: 'CART' },
     include: { cycle: true },
   });
   if (!order) return { error: 'You have no cart for this week.' };

@@ -19,23 +19,14 @@ export function newOrderReference(): string {
 }
 
 export async function getOrCreateCart(userId: string, cycleId: string): Promise<Order> {
-  const existing = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId, cycleId } },
+  const existing = await prisma.order.findFirst({
+    where: { userId, cycleId, status: 'CART' },
   });
   if (existing) return existing;
 
-  // Two tabs can race here; the unique index is the arbiter.
-  try {
-    return await prisma.order.create({
-      data: { userId, cycleId, reference: newOrderReference(), status: 'CART' },
-    });
-  } catch {
-    const retry = await prisma.order.findUnique({
-      where: { userId_cycleId: { userId, cycleId } },
-    });
-    if (retry) return retry;
-    throw new Error('Could not open a cart for this week.');
-  }
+  return prisma.order.create({
+    data: { userId, cycleId, reference: newOrderReference(), status: 'CART' },
+  })
 }
 
 /** Portions already committed for a menu item by everyone. */
@@ -133,10 +124,18 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
     return { ok: false, error: 'Ordering for that week is not open.' };
   }
 
-  const order = await getOrCreateCart(userId, cycle.id);
-  if (order.status !== 'CART') {
-    return { ok: false, error: 'Your order for this week has already been submitted.' };
+  const lockedSameDay = await prisma.orderItem.findFirst({
+    where: {
+      serviceDate: menuItem.menuDay.serviceDate,
+      order: { userId, cycleId: cycle.id, status: { not: 'CART' } },
+    },
+  });
+
+  if (lockedSameDay) {
+    return { ok: false, error: 'Your order for this day has already been submitted.' }
   }
+
+  const order = await getOrCreateCart(userId, cycle.id);
 
   if (menuItem.capacity != null) {
     const others = await committedQuantity(menuItemId, order.id);
@@ -195,13 +194,10 @@ export async function clearMeal(userId: string, menuItemId: string): Promise<Car
     return { ok: false, error: 'Ordering for that week is not open.' };
   }
 
-  const order = await prisma.order.findUnique({
-    where: { userId_cycleId: { userId, cycleId: cycle.id } },
+  const order = await prisma.order.findFirst({
+    where: { userId, cycleId: cycle.id, status: 'CART' },
   });
   if (!order) return { ok: true };
-  if (order.status !== 'CART') {
-    return { ok: false, error: 'Your order for this week has already been submitted.' };
-  }
 
   await prisma.orderItem.deleteMany({ where: { orderId: order.id, menuItemId } });
   await repriceOrder(order.id);

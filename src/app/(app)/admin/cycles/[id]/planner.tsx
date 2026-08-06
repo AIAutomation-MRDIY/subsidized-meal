@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import { ActionForm, InlineSubmit } from '@/components/action-form';
 import { Dialog } from '@/components/dialog';
@@ -26,6 +26,16 @@ export type PlannerItem = {
   capacity: number | null;
   ordered: number;
 };
+
+function groupByRestaurant<T extends { restaurantName: string }>(rows: T[]): Array<[string, T[]]> {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const bucket = groups.get(row.restaurantName) ?? [];
+    bucket.push(row);
+    groups.set(row.restaurantName, bucket);
+  }
+  return [...groups.entries()];
+}
 
 /**
  * One day of the weekly planner. Only this day's items are fetched by the
@@ -79,53 +89,66 @@ export function DayPlanner({
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
-                  const full = item.capacity != null && item.ordered >= item.capacity;
-                  return (
-                    <tr key={item.id}>
-                      <td className="font-medium text-slate-900">{item.dishName}</td>
-                      <td className="text-slate-600">{item.restaurantName}</td>
-                      <td className="num">
-                        <span className="font-medium text-slate-900">{formatSen(item.priceSen)}</span>
-                        {item.priceSen !== item.catalogPriceSen ? (
-                          <div className="text-[11px] text-amber-600">
-                            catalogue {formatSen(item.catalogPriceSen)}
-                          </div>
-                        ) : null}
+                {groupByRestaurant(items).map(([restaurantName, group]) => (
+                  <Fragment key={restaurantName}>
+                    <tr>
+                      <td
+                        colSpan={editable ? 4 : 3}
+                        className="bg-slate-50/80 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                      >
+                        {restaurantName}
                       </td>
-                      <td>
-                        {item.capacity == null ? (
-                          <span className="text-slate-400">Unlimited</span>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
-                              <div
-                                className={`h-full rounded-full ${full ? 'bg-red-500' : 'bg-brand-500'}`}
-                                style={{
-                                  width: `${Math.min(100, (item.ordered / item.capacity) * 100)}%`,
-                                }}
-                              />
-                            </div>
-                            <span className={`text-xs tabular-nums ${full ? 'text-red-600' : 'text-slate-500'}`}>
-                              {item.ordered}/{item.capacity}
-                            </span>
-                          </div>
-                        )}
-                      </td>
-                      {editable ? (
-                        <td>
-                          <div className="flex justify-end gap-1.5">
-                            <EditItemDialog item={item} />
-                            <form action={removeMenuItem}>
-                              <input type="hidden" name="id" value={item.id} />
-                              <InlineSubmit label="Remove" variant="danger" />
-                            </form>
-                          </div>
-                        </td>
-                      ) : null}
                     </tr>
-                  );
-                })}
+                    {group.map((item) => {
+                      const full = item.capacity != null && item.ordered >= item.capacity;
+                      return (
+                        <tr key={item.id}>
+                          <td className="font-medium text-slate-900">{item.dishName}</td>
+                          <td className="num">
+                            <span className="font-medium text-slate-900">{formatSen(item.priceSen)}</span>
+                            {item.priceSen !== item.catalogPriceSen ? (
+                              <div className="text-[11px] text-amber-600">
+                                catalogue {formatSen(item.catalogPriceSen)}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td>
+                            {item.capacity == null ? (
+                              <span className="text-slate-400">Unlimited</span>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
+                                  <div
+                                    className={`h-full rounded-full ${full ? 'bg-red-500' : 'bg-brand-500'}`}
+                                    style={{
+                                      width: `${Math.min(100, (item.ordered / item.capacity) * 100)}%`,
+                                    }}
+                                  />
+                                </div>
+                                <span
+                                  className={`text-xs tabular-nums ${full ? 'text-red-600' : 'text-slate-500'}`}
+                                >
+                                  {item.ordered}/{item.capacity}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          {editable ? (
+                            <td>
+                              <div className="flex justify-end gap-1.5">
+                                <EditItemDialog item={item} />
+                                <form action={removeMenuItem}>
+                                  <input type="hidden" name="id" value={item.id} />
+                                  <InlineSubmit label="Remove" variant="danger" />
+                                </form>
+                              </div>
+                            </td>
+                          ) : null}
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
               </tbody>
             </table>
           </div>
@@ -159,7 +182,7 @@ function AddDishForm({
   const selected = dishes.find((d) => d.id === dishId);
 
   return (
-    <ActionForm action={addMenuItem} submitLabel="Add to this day" className="space-y-0">
+    <ActionForm action={addMenuItem} submitLabel="Add to this day" className="space-y-3">
       <input type="hidden" name="menuDayId" value={menuDayId} />
 
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_7rem]">
@@ -178,11 +201,15 @@ function AddDishForm({
             <option value="" disabled>
               Choose a dish…
             </option>
-            {dishes.map((d) => (
-              <option key={d.id} value={d.id} disabled={taken.has(d.id)}>
-                {d.name} — {d.restaurantName} ({formatSen(d.priceSen)})
-                {taken.has(d.id) ? ' · already added' : ''}
-              </option>
+            {groupByRestaurant(dishes).map(([restaurantName, group]) => (
+              <optgroup key={restaurantName} label={restaurantName}>
+                {group.map((d) => (
+                  <option key={d.id} value={d.id} disabled={taken.has(d.id)}>
+                    {d.name} ({formatSen(d.priceSen)})
+                    {taken.has(d.id) ? ' · already added' : ''}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>

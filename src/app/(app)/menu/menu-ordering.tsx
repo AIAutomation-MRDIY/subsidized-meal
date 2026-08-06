@@ -2,11 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { Fragment, useState, useTransition } from 'react';
 
 import { formatSen } from '@/lib/money';
 import { DayTabs, type DayTab } from '@/components/day-tabs';
-import { StatusBadge } from '@/components/ui';
 
 import { checkout, chooseMeal, clearCart, removeMeal } from './actions';
 
@@ -33,7 +32,24 @@ export type CartLine = {
   dayLabel: string;
   dishName: string;
   netSen: number;
+  locked: boolean;
 };
+
+/**
+ * Dishes for a day, grouped by restaurant so a day with several vendors
+ * reads as sections instead of one long undifferentiated list. Restaurants
+ * appear in the order their first dish appears - i.e. whatever order the
+ * admin's menu planner already set (sortOrder) - rather than alphabetical.
+ */
+function groupByRestaurant(dishes: MenuDish[]): Array<[string, MenuDish[]]> {
+  const groups = new Map<string, MenuDish[]>();
+  for (const dish of dishes) {
+    const bucket = groups.get(dish.restaurantName) ?? [];
+    bucket.push(dish);
+    groups.set(dish.restaurantName, bucket);
+  }
+  return [...groups.entries()];
+}
 
 export function MenuOrdering({
   cycleId,
@@ -47,6 +63,7 @@ export function MenuOrdering({
   readOnly = false,
   orderReference,
   orderStatus,
+  hasSettledOrders = false,
 }: {
   cycleId: string;
   tabs: DayTab[];
@@ -60,6 +77,7 @@ export function MenuOrdering({
   readOnly?: boolean;
   orderReference?: string;
   orderStatus?: string;
+  hasSettledOrders?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -107,7 +125,7 @@ export function MenuOrdering({
           <header className="flex items-baseline justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-3">
             <h2 className="text-sm font-semibold text-slate-900">{dayHeading}</h2>
             <span className="text-xs text-slate-500">
-              {readOnly ? `${dishes.length} on the menu` : `Choose one · ${dishes.length} available`}
+              {readOnly ? `${dishes.length} on the menu · already paid for this day` : `Choose one · ${dishes.length} available`}
             </span>
           </header>
 
@@ -121,14 +139,15 @@ export function MenuOrdering({
               aria-label={readOnly ? undefined : `Meal for ${dayHeading}`}
               className="divide-y divide-slate-100"
             >
-              {dishes.map((dish) => (
-                <DishRow
-                  key={dish.menuItemId}
-                  dish={dish}
-                  busy={busyId === dish.menuItemId}
-                  readOnly={readOnly}
-                  onToggle={toggle}
-                />
+              {groupByRestaurant(dishes).map(([restaurantName, group]) => (
+                <Fragment key={restaurantName}>
+                  <li role="presentation" className="bg-slate-50/80 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {restaurantName}
+                  </li>
+                  {group.map((dish) => (
+                    <DishRow key={dish.menuItemId} dish={dish} busy={busyId === dish.menuItemId} readOnly={readOnly} onToggle={toggle} />
+                  ))}
+                </Fragment>
               ))}
             </ul>
           )}
@@ -140,6 +159,7 @@ export function MenuOrdering({
         totalSen={totalSen}
         cycleId={cycleId}
         onClear={clear}
+        hasSettledOrders={hasSettledOrders}
         readOnly={readOnly}
         orderReference={orderReference}
         orderStatus={orderStatus}
@@ -178,9 +198,8 @@ function DishRow({
     <>
       <span
         aria-hidden
-        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
-          chosen ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white'
-        }`}
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${chosen ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 bg-white'
+          }`}
       >
         {busy ? (
           <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-500" />
@@ -203,7 +222,6 @@ function DishRow({
           ))}
           {soldOut ? <span className="badge bg-red-100 text-red-700">Sold out</span> : null}
         </span>
-        <span className="mt-0.5 block text-xs text-slate-500">{dish.restaurantName}</span>
         {dish.description ? (
           <span className="mt-0.5 line-clamp-1 block text-xs text-slate-400">{dish.description}</span>
         ) : null}
@@ -227,9 +245,8 @@ function DishRow({
     </>
   );
 
-  const rowClass = `flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors ${
-    chosen ? 'bg-brand-50/60' : soldOut ? 'opacity-55' : ''
-  }`;
+  const rowClass = `flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors ${chosen ? 'bg-brand-50/60' : soldOut ? 'opacity-55' : ''
+    }`;
 
   if (readOnly) {
     return <li className={`${rowClass} ${chosen ? '' : 'opacity-70'}`}>{body}</li>;
@@ -244,9 +261,8 @@ function DishRow({
         aria-label={`${dish.dishName} from ${dish.restaurantName}, ${formatSen(dish.priceSen)}`}
         disabled={disabled}
         onClick={() => onToggle(dish.menuItemId, chosen)}
-        className={`${rowClass} ${
-          chosen ? 'hover:bg-brand-50' : soldOut ? 'cursor-not-allowed' : 'hover:bg-slate-50'
-        }`}
+        className={`${rowClass} ${chosen ? 'hover:bg-brand-50' : soldOut ? 'cursor-not-allowed' : 'hover:bg-slate-50'
+          }`}
       >
         {body}
       </button>
@@ -262,6 +278,7 @@ function OrderSummary({
   readOnly,
   orderReference,
   orderStatus,
+  hasSettledOrders,
 }: {
   cartLines: CartLine[];
   totalSen: number;
@@ -270,6 +287,7 @@ function OrderSummary({
   readOnly: boolean;
   orderReference?: string;
   orderStatus?: string;
+  hasSettledOrders: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -282,7 +300,8 @@ function OrderSummary({
     byDay.set(line.dayKey, bucket);
   }
 
-  const empty = cartLines.length === 0;
+  const pendingLines = cartLines.filter((l) => !l.locked);
+  const empty = pendingLines.length === 0;
   const nothingToPay = totalSen === 0 && !empty;
 
   function submit() {
@@ -300,12 +319,8 @@ function OrderSummary({
     <aside className="xl:sticky xl:top-20 xl:self-start">
       <div className="card overflow-hidden">
         <header className="flex items-baseline justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">
-            {readOnly ? 'Your order' : 'Your week'}
-          </h2>
-          {readOnly ? (
-            orderStatus ? <StatusBadge status={orderStatus} /> : null
-          ) : !empty ? (
+          <h2 className="text-sm font-semibold text-slate-900">Your week</h2>
+          {!empty ? (
             <button
               type="button"
               onClick={onClear}
@@ -317,7 +332,7 @@ function OrderSummary({
           ) : null}
         </header>
 
-        {empty ? (
+        {cartLines.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-slate-400">
             Pick one meal for each day you will be in.
           </p>
@@ -330,7 +345,14 @@ function OrderSummary({
                 </p>
                 {day.lines.map((line) => (
                   <div key={line.id} className="mt-1 flex items-baseline justify-between gap-3 text-sm">
-                    <span className="min-w-0 truncate text-slate-700">{line.dishName}</span>
+                    <span className="min-w-0 truncate text-slate-700">
+                      {line.dishName}
+                      {line.locked ? (
+                        <span className="ml-1.5 badge bg-emerald-100 text-emerald-800 align-middle">
+                          Paid
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="shrink-0 tabular-nums text-slate-900">{formatSen(line.netSen)}</span>
                   </div>
                 ))}
@@ -346,7 +368,7 @@ function OrderSummary({
             </span>
           </div>
           <div className="mt-2 flex items-baseline justify-between border-t border-slate-200 pt-3">
-            <span className="font-medium text-slate-900">{readOnly ? 'Total paid' : 'You pay'}</span>
+            <span className="font-medium text-slate-900">You pay</span>
             <span className="text-xl font-semibold tabular-nums text-slate-900">
               {formatSen(totalSen)}
             </span>
@@ -354,44 +376,36 @@ function OrderSummary({
         </div>
 
         <div className="border-t border-slate-200 px-5 py-4">
-          {readOnly ? (
-            <>
-              {orderReference ? (
-                <Link href={`/orders/${orderReference}`} className="btn-secondary w-full">
-                  View receipt
+          {empty ? (
+            hasSettledOrders ? (
+              <>
+                <Link href="/orders" className="btn-secondary w-full">
+                  View receipts
                 </Link>
-              ) : null}
-              <p className="mt-2 text-center text-xs text-slate-500">
-                Ordering for this week is closed for you. Reference {orderReference}.
+                <p className="mt-2 text-center text-xs text-slate-500">
+                  Everything you have chosen this week is paid for. Pick a meal on any open day above
+                  to add more.
+                </p>
+              </>
+            ) : (
+              <p className="text-center text-xs text-slate-500">
+                Choose a meal for each day you will be in.
               </p>
-            </>
+            )
           ) : (
             <>
               {error ? (
                 <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
               ) : null}
 
-              <button
-                type="button"
-                onClick={submit}
-                disabled={empty || pending}
-                className="btn-primary w-full"
-              >
-                {pending
-                  ? 'Please wait…'
-                  : nothingToPay
-                    ? 'Confirm order'
-                    : empty
-                      ? 'Pay'
-                      : `Pay ${formatSen(totalSen)}`}
+              <button type="button" onClick={submit} disabled={pending} className="btn-primary w-full">
+                {pending ? 'Please wait…' : nothingToPay ? 'Confirm order' : `Pay ${formatSen(totalSen)}`}
               </button>
 
               <p className="mt-2 text-center text-xs text-slate-500">
-                {empty
-                  ? 'Choose a meal for each day you will be in.'
-                  : nothingToPay
-                    ? 'Nothing to pay for this week.'
-                    : 'Saved as you go. Confirmed once payment succeeds.'}
+                {nothingToPay
+                  ? 'Nothing to pay for the days you just chose.'
+                  : 'Saved as you go. Confirmed once payment succeeds.'}
               </p>
             </>
           )}
