@@ -298,7 +298,7 @@ model Order {
   items          OrderItem[]
   payments       Payment[]
 
-  @@unique([userId, cycleId])
+  @@index([userId, cycleId])
   @@index([status])
   @@index([cycleId, status])
   @@index([paidAt])
