@@ -28,6 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       items: [
         { href: '/admin/cycles', label: 'Weekly menus' },
         { href: '/admin/restaurants', label: 'Restaurants' },
+        { href: '/admin/delivery-sites', label: 'Delivery sites' },
         { href: '/admin/dishes', label: 'Dishes & prices' },
         { href: '/admin/subsidies', label: 'Subsidies' },
         { href: '/admin/users', label: 'Users & roles' },

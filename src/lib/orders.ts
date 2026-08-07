@@ -254,6 +254,21 @@ export async function repriceOrder(orderId: string): Promise<Order> {
 
 export type CheckoutValidation = { ok: true } | { ok: false; error: string };
 
+export async function setDeliverySite(
+  userId: string,
+  cycleId: string,
+  deliverySiteId: string,
+): Promise<CartMutationResult> {
+  const site = await prisma.deliverySite.findUnique({ where: { id: deliverySiteId } });
+  if (!site || !site.active) return { ok: false, error: 'That delivery site is not available.' };
+
+  const order = await prisma.order.findFirst({ where: { userId, cycleId, status: 'CART' } });
+  if (!order) return { ok: false, error: 'Add a meal to your cart first.' };
+
+  await prisma.order.update({ where: { id: order.id }, data: { deliverySiteId } });
+  return { ok: true };
+}
+
 /** Re-run every guard immediately before money is involved. */
 export async function validateForCheckout(orderId: string): Promise<CheckoutValidation> {
   const order = await prisma.order.findUnique({
@@ -264,6 +279,7 @@ export async function validateForCheckout(orderId: string): Promise<CheckoutVali
   if (order.status !== 'CART')
     return { ok: false, error: 'This order has already been submitted.' };
   if (order.items.length === 0) return { ok: false, error: 'Your cart is empty.' };
+  if (!order.deliverySiteId) return { ok: false, error: 'Choose a delivery site before paying.' };
   if (!isOrderingOpen(order.cycle)) return { ok: false, error: 'The ordering window has closed.' };
 
   // One meal per day, re-checked here so a cart built before the rule

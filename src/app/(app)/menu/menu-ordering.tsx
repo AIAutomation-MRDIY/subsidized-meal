@@ -7,7 +7,7 @@ import { Fragment, useState, useTransition } from 'react';
 import { formatSen } from '@/lib/money';
 import { DayTabs, type DayTab } from '@/components/day-tabs';
 
-import { checkout, chooseMeal, clearCart, removeMeal } from './actions';
+import { checkout, chooseDeliverySite, chooseMeal, clearCart, removeMeal } from './actions';
 
 export type MenuDish = {
   menuItemId: string;
@@ -64,6 +64,8 @@ export function MenuOrdering({
   orderReference,
   orderStatus,
   hasSettledOrders = false,
+  deliverySites,
+  selectedDeliverySiteId,
 }: {
   cycleId: string;
   tabs: DayTab[];
@@ -78,6 +80,10 @@ export function MenuOrdering({
   orderReference?: string;
   orderStatus?: string;
   hasSettledOrders?: boolean;
+  /** Active sites the employee can choose to have this order delivered to. */
+  deliverySites: Array<{ id: string; name: string }>;
+  /** The open cart's current choice, if one has been made yet. */
+  selectedDeliverySiteId: string | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +166,8 @@ export function MenuOrdering({
         cycleId={cycleId}
         onClear={clear}
         hasSettledOrders={hasSettledOrders}
+        deliverySites={deliverySites}
+        selectedDeliverySiteId={selectedDeliverySiteId}
         readOnly={readOnly}
         orderReference={orderReference}
         orderStatus={orderStatus}
@@ -279,6 +287,8 @@ function OrderSummary({
   orderReference,
   orderStatus,
   hasSettledOrders,
+  deliverySites,
+  selectedDeliverySiteId,
 }: {
   cartLines: CartLine[];
   totalSen: number;
@@ -288,9 +298,12 @@ function OrderSummary({
   orderReference?: string;
   orderStatus?: string;
   hasSettledOrders: boolean;
+  deliverySites: Array<{ id: string; name: string }>;
+  selectedDeliverySiteId: string | null;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [siteSaving, setSiteSaving] = useState(false);
 
   // Group by day so people see their whole week at a glance.
   const byDay = new Map<string, { label: string; lines: CartLine[] }>();
@@ -304,8 +317,22 @@ function OrderSummary({
   const empty = pendingLines.length === 0;
   const nothingToPay = totalSen === 0 && !empty;
 
+  function changeSite(deliverySiteId: string) {
+    setError(null);
+    setSiteSaving(true);
+    startTransition(async () => {
+      const result = await chooseDeliverySite(cycleId, deliverySiteId);
+      setSiteSaving(false);
+      if (!result.ok) setError(result.error ?? 'Could not set the delivery site.');
+    });
+  }
+
   function submit() {
     setError(null);
+    if (!selectedDeliverySiteId) {
+      setError('Choose a delivery site before paying.');
+      return;
+    }
     const data = new FormData();
     data.set('cycleId', cycleId);
     startTransition(async () => {
@@ -394,23 +421,44 @@ function OrderSummary({
             )
           ) : (
             <>
+              <label className="mb-3 block text-xs font-medium text-slate-600">
+                Deliver to
+                <select
+                  className="input mt-1"
+                  value={selectedDeliverySiteId ?? ''}
+                  disabled={siteSaving}
+                  onChange={(e) => changeSite(e.target.value)}
+                >
+                  <option value="" disabled>
+                    Choose a site…
+                  </option>
+                  {deliverySites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               {error ? (
                 <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
               ) : null}
 
-              <button type="button" onClick={submit} disabled={pending} className="btn-primary w-full">
+              <button type="button" onClick={submit} disabled={pending || !selectedDeliverySiteId} className="btn-primary w-full"
+              >
                 {pending ? 'Please wait…' : nothingToPay ? 'Confirm order' : `Pay ${formatSen(totalSen)}`}
               </button>
 
               <p className="mt-2 text-center text-xs text-slate-500">
-                {nothingToPay
-                  ? 'Nothing to pay for the days you just chose.'
-                  : 'Saved as you go. Confirmed once payment succeeds.'}
+                {!selectedDeliverySiteId
+                  ? 'Choose a delivery site to continue.'
+                  : nothingToPay
+                    ? 'Nothing to pay for the days you just chose.'
+                    : 'Saved as you go. Confirmed once payment succeeds.'}
               </p>
             </>
           )}
         </div>
       </div>
-    </aside>
+    </aside >
   );
 }

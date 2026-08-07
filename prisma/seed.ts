@@ -36,10 +36,10 @@ function seedPassword(): string {
   if (process.env.SEED_TARGET_REMOTE) {
     console.error(
       '\nRefusing to seed a remote database with the default demo password.\n' +
-        'The default is published in the README, so seeding a hosted deployment\n' +
-        'with it would leave a publicly known administrator account.\n\n' +
-        'Set SEED_DEFAULT_PASSWORD to something only you know, for example:\n' +
-        '  SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)" npm run db:seed\n',
+      'The default is published in the README, so seeding a hosted deployment\n' +
+      'with it would leave a publicly known administrator account.\n\n' +
+      'Set SEED_DEFAULT_PASSWORD to something only you know, for example:\n' +
+      '  SEED_DEFAULT_PASSWORD="$(openssl rand -base64 18)" npm run db:seed\n',
     );
     process.exit(1);
   }
@@ -184,90 +184,90 @@ async function main() {
       description?: string;
     }>;
   }> = [
-    {
-      restaurant: {
-        name: 'Nasi Kandar Pelita',
-        cuisine: 'Mamak',
-        contactName: 'Encik Zul',
-        contactPhone: '03-2141 5678',
+      {
+        restaurant: {
+          name: 'Nasi Kandar Pelita',
+          cuisine: 'Mamak',
+          contactName: 'Encik Zul',
+          contactPhone: '03-2141 5678',
+        },
+        dishes: [
+          {
+            name: 'Nasi Kandar Ayam Goreng',
+            priceSen: 1250,
+            category: 'Main',
+            tags: ['halal', 'spicy'],
+            description: 'Fried chicken with mixed curry gravy',
+          },
+          { name: 'Nasi Kandar Daging Kicap', priceSen: 1450, category: 'Main', tags: ['halal'] },
+          { name: 'Roti Canai Set', priceSen: 750, category: 'Light', tags: ['halal', 'vegetarian'] },
+          { name: 'Mee Goreng Mamak', priceSen: 950, category: 'Main', tags: ['halal', 'spicy'] },
+        ],
       },
-      dishes: [
-        {
-          name: 'Nasi Kandar Ayam Goreng',
-          priceSen: 1250,
-          category: 'Main',
-          tags: ['halal', 'spicy'],
-          description: 'Fried chicken with mixed curry gravy',
+      {
+        restaurant: {
+          name: 'Kedai Kopi Ah Seng',
+          cuisine: 'Chinese',
+          contactName: 'Ah Seng',
+          contactPhone: '03-7788 1234',
         },
-        { name: 'Nasi Kandar Daging Kicap', priceSen: 1450, category: 'Main', tags: ['halal'] },
-        { name: 'Roti Canai Set', priceSen: 750, category: 'Light', tags: ['halal', 'vegetarian'] },
-        { name: 'Mee Goreng Mamak', priceSen: 950, category: 'Main', tags: ['halal', 'spicy'] },
-      ],
-    },
-    {
-      restaurant: {
-        name: 'Kedai Kopi Ah Seng',
-        cuisine: 'Chinese',
-        contactName: 'Ah Seng',
-        contactPhone: '03-7788 1234',
+        dishes: [
+          {
+            name: 'Chicken Rice',
+            priceSen: 1100,
+            category: 'Main',
+            tags: [],
+            description: 'Steamed chicken with fragrant rice',
+          },
+          { name: 'Wantan Mee', priceSen: 1000, category: 'Main', tags: [] },
+          { name: 'Char Kuey Teow', priceSen: 1150, category: 'Main', tags: ['spicy'] },
+          { name: 'Kopi O Ice', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
+        ],
       },
-      dishes: [
-        {
-          name: 'Chicken Rice',
-          priceSen: 1100,
-          category: 'Main',
-          tags: [],
-          description: 'Steamed chicken with fragrant rice',
+      {
+        restaurant: {
+          name: 'Green Bowl',
+          cuisine: 'Healthy',
+          contactName: 'Melissa Koh',
+          contactPhone: '012-345 6789',
         },
-        { name: 'Wantan Mee', priceSen: 1000, category: 'Main', tags: [] },
-        { name: 'Char Kuey Teow', priceSen: 1150, category: 'Main', tags: ['spicy'] },
-        { name: 'Kopi O Ice', priceSen: 350, category: 'Drink', tags: ['vegetarian'] },
-      ],
-    },
-    {
-      restaurant: {
-        name: 'Green Bowl',
-        cuisine: 'Healthy',
-        contactName: 'Melissa Koh',
-        contactPhone: '012-345 6789',
+        dishes: [
+          {
+            name: 'Grilled Chicken Quinoa Bowl',
+            priceSen: 1650,
+            category: 'Main',
+            tags: ['halal', 'high-protein'],
+          },
+          {
+            name: 'Tofu Buddha Bowl',
+            priceSen: 1450,
+            category: 'Main',
+            tags: ['vegetarian', 'vegan'],
+          },
+          { name: 'Salmon Poke Bowl', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
+          { name: 'Fresh Fruit Cup', priceSen: 600, category: 'Side', tags: ['vegetarian', 'vegan'] },
+        ],
       },
-      dishes: [
-        {
-          name: 'Grilled Chicken Quinoa Bowl',
-          priceSen: 1650,
-          category: 'Main',
-          tags: ['halal', 'high-protein'],
+      {
+        restaurant: {
+          name: 'Warung Bu Tini',
+          cuisine: 'Indonesian',
+          contactName: 'Bu Tini',
+          contactPhone: '011-2233 4455',
         },
-        {
-          name: 'Tofu Buddha Bowl',
-          priceSen: 1450,
-          category: 'Main',
-          tags: ['vegetarian', 'vegan'],
-        },
-        { name: 'Salmon Poke Bowl', priceSen: 1950, category: 'Main', tags: ['contains-fish'] },
-        { name: 'Fresh Fruit Cup', priceSen: 600, category: 'Side', tags: ['vegetarian', 'vegan'] },
-      ],
-    },
-    {
-      restaurant: {
-        name: 'Warung Bu Tini',
-        cuisine: 'Indonesian',
-        contactName: 'Bu Tini',
-        contactPhone: '011-2233 4455',
+        dishes: [
+          { name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
+          {
+            name: 'Gado-Gado',
+            priceSen: 1050,
+            category: 'Main',
+            tags: ['halal', 'vegetarian', 'contains-nuts'],
+          },
+          { name: 'Soto Ayam', priceSen: 1200, category: 'Main', tags: ['halal'] },
+          { name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
+        ],
       },
-      dishes: [
-        { name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
-        {
-          name: 'Gado-Gado',
-          priceSen: 1050,
-          category: 'Main',
-          tags: ['halal', 'vegetarian', 'contains-nuts'],
-        },
-        { name: 'Soto Ayam', priceSen: 1200, category: 'Main', tags: ['halal'] },
-        { name: 'Es Teh Manis', priceSen: 400, category: 'Drink', tags: ['halal', 'vegetarian'] },
-      ],
-    },
-  ];
+    ];
 
   const allDishes: Dish[] = [];
   for (const entry of catalogue) {
@@ -288,6 +288,18 @@ async function main() {
     }
   }
   console.log(`  ${catalogue.length} restaurants, ${allDishes.length} dishes`);
+
+  // --- Delivery sites ----------------------------------------------------
+  // Edit this list to match your actual sites - it's the only part of this
+  // block you should need to touch.
+  const DELIVERY_SITES: string[] = ['Warehouse A', 'Warehouse B', 'Warehouse H', 'Warehouse P', 'Warehouse Q', 'Warehouse X', 'Warehouse Y', 'Mines 2 Office'];
+
+  await prisma.deliverySite.deleteMany({});
+  await prisma.deliverySite.createMany({
+    data: DELIVERY_SITES.map((name) => ({ name, active: true })),
+  });
+  const deliverySites = await prisma.deliverySite.findMany({ select: { id: true } });
+  console.log(`  ${DELIVERY_SITES.length} delivery sites`);
 
   // --- Subsidy rules ---------------------------------------------------
   await prisma.subsidyRule.deleteMany({});
@@ -475,6 +487,7 @@ async function main() {
           subsidySnapshot: outcome.snapshot as never,
           submittedAt: opts.orderCutoffAt,
           paidAt: paid ? opts.orderCutoffAt : null,
+          deliverySiteId: deliverySites[Math.floor(rand() * deliverySites.length)]?.id,
         },
       });
 

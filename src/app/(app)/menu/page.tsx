@@ -64,6 +64,12 @@ export default async function MenuPage({
     orderBy: { createdAt: 'asc' },
   });
 
+  const deliverySites = await prisma.deliverySite.findMany({
+    where: { active: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
+
   const cart = orders.find((o) => o.status === 'CART');
   const settledOrders = orders.filter((o) => o.status !== 'CART');
   const orderItems = orders.flatMap((o) =>
@@ -215,6 +221,8 @@ export default async function MenuPage({
         orderReference={cart?.reference}
         orderStatus={cart?.status}
         hasSettledOrders={settledOrders.length > 0}
+        deliverySites={deliverySites}
+        selectedDeliverySiteId={cart?.deliverySiteId ?? null}
       />
     </>
   );

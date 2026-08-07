@@ -267,6 +267,21 @@ model SubsidyRule {
   @@index([active, scope])
 }
 
+/// Where an order's food physically gets sent - one per Order, chosen at
+/// checkout. A managed list (not free text) so it can't accumulate typo'd
+/// duplicates like "Warehouse A" / "warehouse a".
+model DeliverySite {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    Order[]
+
+  @@index([active])
+}
+
 // ---------------------------------------------------------------------------
 // Orders
 //
@@ -295,6 +310,12 @@ model Order {
   cancelledAt    DateTime?
   cancelReason   String?
 
+  /// Where this order's food goes. Nullable here only so existing rows
+  /// don't break the migration - validateForCheckout requires it before
+  /// payment is allowed, so every real (paid) order has one in practice.
+  deliverySiteId String?
+  deliverySite   DeliverySite? @relation(fields: [deliverySiteId], references: [id])
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -307,6 +328,7 @@ model Order {
   @@index([status])
   @@index([cycleId, status])
   @@index([paidAt])
+  @@index([deliverySiteId])
 }
 
 model OrderItem {

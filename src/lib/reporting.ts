@@ -203,20 +203,21 @@ export async function participation(window: WeekWindow) {
 export async function kitchenSheet(cycleId: string) {
   const items = await prisma.orderItem.findMany({
     where: { order: { cycleId, status: 'PAID' } },
-    select: { restaurantName: true, dishName: true, serviceDate: true, quantity: true },
+    select: { restaurantName: true, dishName: true, serviceDate: true, quantity: true, order: { select: { deliverySite: { select: { name: true } } } }, },
   });
 
   const map = new Map<
     string,
-    { restaurantName: string; serviceDate: Date; dishName: string; quantity: number }
+    { restaurantName: string; serviceDate: Date; dishName: string; quantity: number; deliverySiteName: string; }
   >();
 
   for (const i of items) {
-    const key = `${i.restaurantName}|${toDateKey(i.serviceDate)}|${i.dishName}`;
-    const row = map.get(key) ?? {
+    const deliverySiteName = i.order.deliverySite?.name ?? 'Unassigned';
+    const key = `${i.restaurantName}|${toDateKey(i.serviceDate)}|${i.dishName}|${deliverySiteName}`; const row = map.get(key) ?? {
       restaurantName: i.restaurantName,
       serviceDate: i.serviceDate,
       dishName: i.dishName,
+      deliverySiteName,
       quantity: 0,
     };
     row.quantity += i.quantity;
@@ -227,6 +228,7 @@ export async function kitchenSheet(cycleId: string) {
     (a, b) =>
       a.restaurantName.localeCompare(b.restaurantName) ||
       toDateKey(a.serviceDate).localeCompare(toDateKey(b.serviceDate)) ||
-      a.dishName.localeCompare(b.dishName),
+      a.dishName.localeCompare(b.dishName) ||
+      a.deliverySiteName.localeCompare(b.deliverySiteName),
   );
 }

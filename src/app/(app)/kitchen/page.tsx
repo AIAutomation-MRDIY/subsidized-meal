@@ -118,19 +118,21 @@ export default async function KitchenPage({
                       <tr>
                         <th>Service date</th>
                         <th>Dish</th>
+                        <th>Delivery site</th>
                         <th className="num">Portions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {[...byDate.entries()].map(([dateKey, dayRows]) =>
                         dayRows.map((r, i) => (
-                          <tr key={`${dateKey}-${r.dishName}`}>
+                          <tr key={`${dateKey}-${r.dishName}-${r.deliverySiteName}`}>
                             <td className={i === 0 ? 'font-medium text-slate-900' : 'text-slate-400'}>
                               {i === 0
                                 ? `${formatDate(r.serviceDate, 'weekday')} · ${formatDate(r.serviceDate, 'long')}`
                                 : ''}
                             </td>
                             <td className="text-slate-700">{r.dishName}</td>
+                            <td className="text-slate-600">{r.deliverySiteName}</td>
                             <td className="num font-medium text-slate-900">{r.quantity}</td>
                           </tr>
                         )),
