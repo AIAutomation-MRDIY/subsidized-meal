@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { requireUser } from '@/lib/session';
 import { can, ROLE_LABEL } from '@/lib/rbac';
 import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
+import { UserMenu } from '@/components/user-menu';
 import { logoutAction } from '@/app/login/actions';
 
 export const dynamic = 'force-dynamic';
@@ -60,24 +61,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
 
           <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block">
-              <div className="text-sm font-medium leading-tight text-slate-900">{user.name}</div>
-              <div className="text-xs text-slate-500">
-                {ROLE_LABEL[user.role]}
-                {user.department ? ` · ${user.department}` : ''}
-              </div>
-            </div>
-            <span
-              aria-hidden
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600"
-            >
-              {initials}
-            </span>
-            <form action={logoutAction}>
-              <button type="submit" className="btn-secondary btn-sm">
-                Sign out
-              </button>
-            </form>
+            <UserMenu
+              name={user.name}
+              roleLabel={ROLE_LABEL[user.role]}
+              department={user.department}
+              initials={initials}
+              canViewOrders={can(user.role, 'order:place')}
+              onLogout={logoutAction}
+            />
           </div>
         </div>
 
