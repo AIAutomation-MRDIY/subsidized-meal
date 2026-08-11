@@ -1,7 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useLocale, useTranslations } from 'next-intl';
+import { useEffect, useRef, useState, useTransition } from 'react';
+
+import { LOCALES, LOCALE_LABEL } from '@/i18n/config';
+import { setLocale } from '@/i18n/actions';
 
 /**
  * Avatar/name button that opens a small anchored dropdown - profile summary
@@ -23,8 +28,19 @@ export function UserMenu({
   canViewOrders: boolean;
   onLogout: (formData: FormData) => void | Promise<void>;
 }) {
+  const t = useTranslations('userMenu');
+  const locale = useLocale();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [, startTransition] = useTransition();
   const rootRef = useRef<HTMLDivElement>(null);
+
+  function changeLocale(next: string) {
+    startTransition(async () => {
+      await setLocale(next);
+      router.refresh();
+    });
+  }
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -80,7 +96,7 @@ export function UserMenu({
                 onClick={() => setOpen(false)}
                 className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
               >
-                My orders
+                {t('myOrders')}
               </Link>
             ) : null}
             <a
@@ -89,8 +105,23 @@ export function UserMenu({
               onClick={() => setOpen(false)}
               className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
             >
-              Help &amp; support
+              {t('helpSupport')}
             </a>
+          </div>
+
+          <div className="border-t border-slate-100 px-4 py-3">
+            <label className="mb-1 block text-xs font-medium text-slate-500">{t('language')}</label>
+            <select
+              className="input"
+              value={locale}
+              onChange={(e) => changeLocale(e.target.value)}
+            >
+              {LOCALES.map((l) => (
+                <option key={l} value={l}>
+                  {LOCALE_LABEL[l]}
+                </option>
+              ))}
+            </select>
           </div>
 
           <form action={onLogout} className="border-t border-slate-100 py-1">
@@ -99,7 +130,7 @@ export function UserMenu({
               role="menuitem"
               className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
             >
-              Sign out
+              {t('signOut')}
             </button>
           </form>
         </div>

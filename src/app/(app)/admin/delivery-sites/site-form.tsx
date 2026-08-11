@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 import { Dialog } from '@/components/dialog';
 import { ActionForm } from '@/components/action-form';
 
@@ -11,34 +13,37 @@ type DeliverySiteFields = {
 };
 
 function Fields({ site }: { site?: DeliverySiteFields }) {
+  const t = useTranslations('deliverySitesAdmin');
+  const c = useTranslations('adminCommon');
   return (
     <div>
-      <label className="label">Name</label>
+      <label className="label">{c('name')}</label>
       <input
         name="name"
         required
         defaultValue={site?.name}
         className="input"
-        placeholder="Warehouse A"
+        placeholder={t('namePlaceholder')}
       />
     </div>
   );
 }
 
 export function AddDeliverySiteButton() {
+  const t = useTranslations('deliverySitesAdmin');
   return (
     <Dialog
-      title="Add a delivery site"
+      title={t('addASite')}
       trigger={(open) => (
         <button type="button" className="btn-primary" onClick={open}>
-          Add site
+          {t('addSite')}
         </button>
       )}
     >
       {(close) => (
         <ActionForm
           action={createDeliverySite}
-          submitLabel="Add site"
+          submitLabel={t('addSite')}
           className="space-y-3"
           onSuccess={close}
         >
@@ -50,19 +55,21 @@ export function AddDeliverySiteButton() {
 }
 
 export function EditDeliverySiteDialog({ site }: { site: DeliverySiteFields }) {
+  const t = useTranslations('deliverySitesAdmin');
+  const c = useTranslations('adminCommon');
   return (
     <Dialog
-      title={`Edit ${site.name}`}
+      title={t('editSite', { name: site.name })}
       trigger={(open) => (
         <button type="button" className="btn-secondary btn-sm" onClick={open}>
-          Edit
+          {c('edit')}
         </button>
       )}
     >
       {(close) => (
         <ActionForm
           action={updateDeliverySite}
-          submitLabel="Save changes"
+          submitLabel={c('saveChanges')}
           resetOnSuccess={false}
           className="space-y-3"
           onSuccess={close}

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { prisma } from './prisma';
-import { addWeeks, dateOnly, formatWeekRange, mondayOf, todayInAppTz, toDateKey } from './cycle';
+import { addWeeks, dateOnly, formatDate, formatWeekRange, mondayOf, todayInAppTz, toDateKey } from './cycle';
 
 /**
  * Read-only aggregates shared by the Analytics, Finance and Kitchen views.
@@ -17,7 +17,7 @@ export function trailingWeeks(weeks = 12, now: Date = new Date()): WeekWindow {
   return { from: addWeeks(thisMonday, -(weeks - 1)), to: addWeeks(thisMonday, 1) };
 }
 
-export async function weeklyTotals(window: WeekWindow) {
+export async function weeklyTotals(window: WeekWindow, locale?: string) {
   const cycles = await prisma.menuCycle.findMany({
     where: { serviceWeekStart: { gte: window.from, lt: window.to } },
     orderBy: { serviceWeekStart: 'asc' },
@@ -57,7 +57,7 @@ export async function weeklyTotals(window: WeekWindow) {
     return {
       cycleId: c.id,
       weekStart: toDateKey(c.serviceWeekStart),
-      label: formatWeekRange(c.serviceWeekStart),
+      label: formatWeekRange(c.serviceWeekStart, locale),
       status: c.status,
       orders: g?._count._all ?? 0,
       meals: mealsByCycle.get(c.id) ?? 0,
@@ -106,9 +106,8 @@ export async function restaurantShare(window: WeekWindow) {
   }));
 }
 
-const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export async function demandByWeekday(window: WeekWindow) {
+export async function demandByWeekday(window: WeekWindow, locale?: string) {
   const rows = await prisma.orderItem.groupBy({
     by: ['serviceDate'],
     where: {
@@ -126,7 +125,7 @@ export async function demandByWeekday(window: WeekWindow) {
 
   // Monday-first, Monday..Friday.
   return [1, 2, 3, 4, 5].map((dow) => ({
-    weekday: WEEKDAY_SHORT[dow],
+    weekday: formatDate(new Date(Date.UTC(2024, 0, dow)), 'weekday', locale).slice(0, 3),
     meals: totals.get(dow) ?? 0,
   }));
 }

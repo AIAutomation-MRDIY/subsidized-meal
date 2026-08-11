@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Fragment, useState, useTransition } from 'react';
 
 import { formatSen } from '@/lib/money';
@@ -32,6 +33,7 @@ export type CartLine = {
   dayLabel: string;
   dishName: string;
   netSen: number;
+  /** True once this line belongs to an already-submitted order (paid, done). */
   locked: boolean;
 };
 
@@ -39,7 +41,8 @@ export type CartLine = {
  * Dishes for a day, grouped by restaurant so a day with several vendors
  * reads as sections instead of one long undifferentiated list. Restaurants
  * appear in the order their first dish appears - i.e. whatever order the
- * admin's menu planner already set (sortOrder) - rather than alphabetical.
+ * admin's menu planner already set (`sortOrder`) - rather than alphabetical,
+ * so this doesn't fight the ordering an admin deliberately chose.
  */
 function groupByRestaurant(dishes: MenuDish[]): Array<[string, MenuDish[]]> {
   const groups = new Map<string, MenuDish[]>();
@@ -61,8 +64,6 @@ export function MenuOrdering({
   totalSen,
   notes,
   readOnly = false,
-  orderReference,
-  orderStatus,
   hasSettledOrders = false,
   deliverySites,
   selectedDeliverySiteId,
@@ -75,16 +76,16 @@ export function MenuOrdering({
   cartLines: CartLine[];
   totalSen: number;
   notes: string | null;
-  /** Submitted orders render the same layout, without the controls. */
+  /** Whether the currently viewed day is locked (already paid). */
   readOnly?: boolean;
-  orderReference?: string;
-  orderStatus?: string;
+  /** Whether any day this week has already been paid for, in any order. */
   hasSettledOrders?: boolean;
   /** Active sites the employee can choose to have this order delivered to. */
   deliverySites: Array<{ id: string; name: string }>;
   /** The open cart's current choice, if one has been made yet. */
   selectedDeliverySiteId: string | null;
 }) {
+  const t = useTranslations('menu');
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -95,7 +96,7 @@ export function MenuOrdering({
     setBusyId(menuItemId);
     startTransition(async () => {
       const result = alreadyChosen ? await removeMeal(menuItemId) : await chooseMeal(menuItemId);
-      if (!result.ok) setError(result.error ?? 'Could not update your order.');
+      if (!result.ok) setError(result.error ?? t('genericError'));
       setBusyId(null);
       router.refresh();
     });
@@ -131,27 +132,36 @@ export function MenuOrdering({
           <header className="flex items-baseline justify-between border-b border-slate-200 bg-slate-50/60 px-5 py-3">
             <h2 className="text-sm font-semibold text-slate-900">{dayHeading}</h2>
             <span className="text-xs text-slate-500">
-              {readOnly ? `${dishes.length} on the menu · already paid for this day` : `Choose one · ${dishes.length} available`}
+              {readOnly
+                ? t('alreadyPaidForDay', { count: dishes.length })
+                : t('chooseOne', { count: dishes.length })}
             </span>
           </header>
 
           {dishes.length === 0 ? (
-            <p className="px-5 py-16 text-center text-sm text-slate-400">
-              Nothing on the menu this day.
-            </p>
+            <p className="px-5 py-16 text-center text-sm text-slate-400">{t('noDishes')}</p>
           ) : (
             <ul
               role={readOnly ? undefined : 'radiogroup'}
-              aria-label={readOnly ? undefined : `Meal for ${dayHeading}`}
+              aria-label={readOnly ? undefined : t('mealForDay', { day: dayHeading })}
               className="divide-y divide-slate-100"
             >
               {groupByRestaurant(dishes).map(([restaurantName, group]) => (
                 <Fragment key={restaurantName}>
-                  <li role="presentation" className="bg-slate-50/80 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <li
+                    role="presentation"
+                    className="bg-slate-50/80 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  >
                     {restaurantName}
                   </li>
                   {group.map((dish) => (
-                    <DishRow key={dish.menuItemId} dish={dish} busy={busyId === dish.menuItemId} readOnly={readOnly} onToggle={toggle} />
+                    <DishRow
+                      key={dish.menuItemId}
+                      dish={dish}
+                      busy={busyId === dish.menuItemId}
+                      readOnly={readOnly}
+                      onToggle={toggle}
+                    />
                   ))}
                 </Fragment>
               ))}
@@ -168,9 +178,6 @@ export function MenuOrdering({
         hasSettledOrders={hasSettledOrders}
         deliverySites={deliverySites}
         selectedDeliverySiteId={selectedDeliverySiteId}
-        readOnly={readOnly}
-        orderReference={orderReference}
-        orderStatus={orderStatus}
       />
     </div>
   );
@@ -198,6 +205,7 @@ function DishRow({
   readOnly: boolean;
   onToggle: (id: string, alreadyChosen: boolean) => void;
 }) {
+  const t = useTranslations('menu');
   const { chosen } = dish;
   const soldOut = dish.remaining !== null && dish.remaining <= 0 && !chosen;
   const disabled = busy || soldOut;
@@ -228,14 +236,14 @@ function DishRow({
               {tag}
             </span>
           ))}
-          {soldOut ? <span className="badge bg-red-100 text-red-700">Sold out</span> : null}
+          {soldOut ? <span className="badge bg-red-100 text-red-700">{t('soldOut')}</span> : null}
         </span>
         {dish.description ? (
           <span className="mt-0.5 line-clamp-1 block text-xs text-slate-400">{dish.description}</span>
         ) : null}
         {!readOnly && dish.remaining !== null && dish.remaining > 0 && dish.remaining <= 5 ? (
           <span className="mt-1 block text-xs font-medium text-amber-600">
-            Only {dish.remaining} left
+            {t('onlyLeft', { count: dish.remaining })}
           </span>
         ) : null}
       </span>
@@ -246,7 +254,7 @@ function DishRow({
         </span>
         {chosen ? (
           <span className="block text-[11px] font-medium text-brand-700">
-            {readOnly ? 'Your choice' : 'Chosen · tap to remove'}
+            {readOnly ? t('yourChoice') : t('chosenTapRemove')}
           </span>
         ) : null}
       </span>
@@ -266,7 +274,11 @@ function DishRow({
         type="button"
         role="radio"
         aria-checked={chosen}
-        aria-label={`${dish.dishName} from ${dish.restaurantName}, ${formatSen(dish.priceSen)}`}
+        aria-label={t('dishAriaLabel', {
+          dish: dish.dishName,
+          restaurant: dish.restaurantName,
+          price: formatSen(dish.priceSen),
+        })}
         disabled={disabled}
         onClick={() => onToggle(dish.menuItemId, chosen)}
         className={`${rowClass} ${chosen ? 'hover:bg-brand-50' : soldOut ? 'cursor-not-allowed' : 'hover:bg-slate-50'
@@ -283,29 +295,27 @@ function OrderSummary({
   totalSen,
   cycleId,
   onClear,
-  readOnly,
-  orderReference,
-  orderStatus,
   hasSettledOrders,
   deliverySites,
   selectedDeliverySiteId,
 }: {
   cartLines: CartLine[];
+  /** Amount due now - the open cart's total, not the whole week's. */
   totalSen: number;
   cycleId: string;
   onClear: () => void;
-  readOnly: boolean;
-  orderReference?: string;
-  orderStatus?: string;
+  /** Whether any day this week has already been paid for, in any order. */
   hasSettledOrders: boolean;
   deliverySites: Array<{ id: string; name: string }>;
   selectedDeliverySiteId: string | null;
 }) {
+  const t = useTranslations('menu');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [siteSaving, setSiteSaving] = useState(false);
 
-  // Group by day so people see their whole week at a glance.
+  // Group by day so people see their whole week at a glance, paid and
+  // pending days together.
   const byDay = new Map<string, { label: string; lines: CartLine[] }>();
   for (const line of cartLines) {
     const bucket = byDay.get(line.dayKey) ?? { label: line.dayLabel, lines: [] };
@@ -313,6 +323,9 @@ function OrderSummary({
     byDay.set(line.dayKey, bucket);
   }
 
+  // Only the pending (unpaid) lines belong to the cart being paid for here -
+  // locked lines are already-settled days and stay visible, but out of reach
+  // of Clear/Pay.
   const pendingLines = cartLines.filter((l) => !l.locked);
   const empty = pendingLines.length === 0;
   const nothingToPay = totalSen === 0 && !empty;
@@ -323,14 +336,14 @@ function OrderSummary({
     startTransition(async () => {
       const result = await chooseDeliverySite(cycleId, deliverySiteId);
       setSiteSaving(false);
-      if (!result.ok) setError(result.error ?? 'Could not set the delivery site.');
+      if (!result.ok) setError(result.error ?? t('siteError'));
     });
   }
 
   function submit() {
     setError(null);
     if (!selectedDeliverySiteId) {
-      setError('Choose a delivery site before paying.');
+      setError(t('chooseSiteToContinue'));
       return;
     }
     const data = new FormData();
@@ -346,7 +359,7 @@ function OrderSummary({
     <aside className="xl:sticky xl:top-20 xl:self-start">
       <div className="card overflow-hidden">
         <header className="flex items-baseline justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Your week</h2>
+          <h2 className="text-sm font-semibold text-slate-900">{t('yourWeek')}</h2>
           {!empty ? (
             <button
               type="button"
@@ -354,15 +367,13 @@ function OrderSummary({
               disabled={pending}
               className="text-xs text-slate-500 underline underline-offset-2 hover:text-slate-800"
             >
-              Clear
+              {t('clear')}
             </button>
           ) : null}
         </header>
 
         {cartLines.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-slate-400">
-            Pick one meal for each day you will be in.
-          </p>
+          <p className="px-5 py-8 text-center text-sm text-slate-400">{t('pickMealPrompt')}</p>
         ) : (
           <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
             {[...byDay.values()].map((day) => (
@@ -376,7 +387,7 @@ function OrderSummary({
                       {line.dishName}
                       {line.locked ? (
                         <span className="ml-1.5 badge bg-emerald-100 text-emerald-800 align-middle">
-                          Paid
+                          {t('paid')}
                         </span>
                       ) : null}
                     </span>
@@ -390,12 +401,10 @@ function OrderSummary({
 
         <div className="border-t border-slate-200 px-5 py-4 text-sm">
           <div className="flex items-baseline justify-between text-slate-600">
-            <span>
-              {byDay.size} day{byDay.size === 1 ? '' : 's'} selected
-            </span>
+            <span>{t('daysSelected', { count: byDay.size })}</span>
           </div>
           <div className="mt-2 flex items-baseline justify-between border-t border-slate-200 pt-3">
-            <span className="font-medium text-slate-900">You pay</span>
+            <span className="font-medium text-slate-900">{t('youPay')}</span>
             <span className="text-xl font-semibold tabular-nums text-slate-900">
               {formatSen(totalSen)}
             </span>
@@ -407,22 +416,17 @@ function OrderSummary({
             hasSettledOrders ? (
               <>
                 <Link href="/orders" className="btn-secondary w-full">
-                  View receipts
+                  {t('viewReceipts')}
                 </Link>
-                <p className="mt-2 text-center text-xs text-slate-500">
-                  Everything you have chosen this week is paid for. Pick a meal on any open day above
-                  to add more.
-                </p>
+                <p className="mt-2 text-center text-xs text-slate-500">{t('everythingPaid')}</p>
               </>
             ) : (
-              <p className="text-center text-xs text-slate-500">
-                Choose a meal for each day you will be in.
-              </p>
+              <p className="text-center text-xs text-slate-500">{t('chooseDayPrompt')}</p>
             )
           ) : (
             <>
               <label className="mb-3 block text-xs font-medium text-slate-600">
-                Deliver to
+                {t('deliverTo')}
                 <select
                   className="input mt-1"
                   value={selectedDeliverySiteId ?? ''}
@@ -430,7 +434,7 @@ function OrderSummary({
                   onChange={(e) => changeSite(e.target.value)}
                 >
                   <option value="" disabled>
-                    Choose a site…
+                    {t('chooseSite')}
                   </option>
                   {deliverySites.map((site) => (
                     <option key={site.id} value={site.id}>
@@ -439,26 +443,35 @@ function OrderSummary({
                   ))}
                 </select>
               </label>
+
               {error ? (
                 <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
               ) : null}
 
-              <button type="button" onClick={submit} disabled={pending || !selectedDeliverySiteId} className="btn-primary w-full"
+              <button
+                type="button"
+                onClick={submit}
+                disabled={pending || !selectedDeliverySiteId}
+                className="btn-primary w-full"
               >
-                {pending ? 'Please wait…' : nothingToPay ? 'Confirm order' : `Pay ${formatSen(totalSen)}`}
+                {pending
+                  ? t('pleaseWait')
+                  : nothingToPay
+                    ? t('confirmOrder')
+                    : t('pay', { amount: formatSen(totalSen) })}
               </button>
 
               <p className="mt-2 text-center text-xs text-slate-500">
                 {!selectedDeliverySiteId
-                  ? 'Choose a delivery site to continue.'
+                  ? t('chooseSiteToContinue')
                   : nothingToPay
-                    ? 'Nothing to pay for the days you just chose.'
-                    : 'Saved as you go. Confirmed once payment succeeds.'}
+                    ? t('nothingToPay')
+                    : t('savedAsYouGo')}
               </p>
             </>
           )}
         </div>
       </div>
-    </aside >
+    </aside>
   );
 }

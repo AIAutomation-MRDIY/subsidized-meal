@@ -1,3 +1,5 @@
+import { getTranslations } from 'next-intl/server';
+
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { PageHeader, Section, EmptyState } from '@/components/ui';
@@ -10,6 +12,8 @@ export const dynamic = 'force-dynamic';
 
 export default async function DeliverySitesPage() {
   await requireCapability('catalogue:manage');
+  const t = await getTranslations('deliverySitesAdmin');
+  const c = await getTranslations('adminCommon');
 
   const sites = await prisma.deliverySite.findMany({
     orderBy: [{ active: 'desc' }, { name: 'asc' }],
@@ -18,17 +22,13 @@ export default async function DeliverySitesPage() {
 
   return (
     <>
-      <PageHeader
-        title="Delivery sites"
-        subtitle="Where an order's food gets sent - chosen per order at checkout."
-        action={<AddDeliverySiteButton />}
-      />
+      <PageHeader title={t('title')} subtitle={t('subtitle')} action={<AddDeliverySiteButton />} />
 
-      <Section title="All delivery sites" description={`${sites.length} total`}>
+      <Section title={t('allSites')} description={t('totalCount', { count: sites.length })}>
         {sites.length === 0 ? (
           <EmptyState
-            title="No delivery sites yet"
-            hint="Add at least one site so employees can check out."
+            title={t('noSitesYet')}
+            hint={t('noSitesHint')}
             action={<AddDeliverySiteButton />}
           />
         ) : (
@@ -36,9 +36,9 @@ export default async function DeliverySitesPage() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th className="num">Orders</th>
-                  <th>Status</th>
+                  <th>{c('name')}</th>
+                  <th className="num">{t('orders')}</th>
+                  <th>{c('status')}</th>
                   <th />
                 </tr>
               </thead>
@@ -53,7 +53,7 @@ export default async function DeliverySitesPage() {
                           s.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {s.active ? 'Active' : 'Inactive'}
+                        {s.active ? c('active') : c('inactive')}
                       </span>
                     </td>
                     <td>
@@ -61,14 +61,14 @@ export default async function DeliverySitesPage() {
                         <EditDeliverySiteDialog site={s} />
                         <form action={toggleDeliverySiteActive}>
                           <input type="hidden" name="id" value={s.id} />
-                          <InlineSubmit label={s.active ? 'Disable' : 'Enable'} />
+                          <InlineSubmit label={s.active ? c('disable') : c('enable')} />
                         </form>
                         <form action={deleteDeliverySite}>
                           <input type="hidden" name="id" value={s.id} />
                           <InlineSubmit
-                            label="Delete"
+                            label={c('delete')}
                             variant="danger"
-                            confirm={`Delete ${s.name}? If it has order history it will be deactivated instead.`}
+                            confirm={t('deleteConfirm', { name: s.name })}
                           />
                         </form>
                       </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Fragment, useMemo, useState } from 'react';
 
 import { ActionForm, InlineSubmit } from '@/components/action-form';
@@ -27,6 +28,7 @@ export type PlannerItem = {
   ordered: number;
 };
 
+/** Groups anything with a restaurantName, preserving first-appearance order. */
 function groupByRestaurant<T extends { restaurantName: string }>(rows: T[]): Array<[string, T[]]> {
   const groups = new Map<string, T[]>();
   for (const row of rows) {
@@ -59,6 +61,7 @@ export function DayPlanner({
   editable: boolean;
 }) {
   const dayValue = items.reduce((sum, i) => sum + i.priceSen, 0);
+  const t = useTranslations('cyclesAdmin');
 
   return (
     <div className="space-y-4">
@@ -68,23 +71,20 @@ export function DayPlanner({
         <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 bg-slate-50/60 px-5 py-3">
           <h2 className="text-sm font-semibold text-slate-900">{dayHeading}</h2>
           <span className="text-xs text-slate-500">
-            {items.length} dish{items.length === 1 ? '' : 'es'} · menu value {formatSen(dayValue)}
+            {t('dishValueSummary', { count: items.length, value: formatSen(dayValue) })}
           </span>
         </header>
 
         {items.length === 0 ? (
-          <p className="px-5 py-12 text-center text-sm text-slate-400">
-            No dishes planned for this day.
-          </p>
+          <p className="px-5 py-12 text-center text-sm text-slate-400">{t('noDishesPlanned')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="table">
               <thead>
                 <tr>
-                  <th>Dish</th>
-                  <th>Restaurant</th>
-                  <th className="num">Price</th>
-                  <th>Capacity</th>
+                  <th>{t('dishColumn')}</th>
+                  <th className="num">{t('price')}</th>
+                  <th>{t('capacity')}</th>
                   {editable ? <th /> : null}
                 </tr>
               </thead>
@@ -108,13 +108,13 @@ export function DayPlanner({
                             <span className="font-medium text-slate-900">{formatSen(item.priceSen)}</span>
                             {item.priceSen !== item.catalogPriceSen ? (
                               <div className="text-[11px] text-amber-600">
-                                catalogue {formatSen(item.catalogPriceSen)}
+                                {t('catalogue')} {formatSen(item.catalogPriceSen)}
                               </div>
                             ) : null}
                           </td>
                           <td>
                             {item.capacity == null ? (
-                              <span className="text-slate-400">Unlimited</span>
+                              <span className="text-slate-400">{t('unlimited')}</span>
                             ) : (
                               <div className="flex items-center gap-2">
                                 <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
@@ -139,7 +139,7 @@ export function DayPlanner({
                                 <EditItemDialog item={item} />
                                 <form action={removeMenuItem}>
                                   <input type="hidden" name="id" value={item.id} />
-                                  <InlineSubmit label="Remove" variant="danger" />
+                                  <InlineSubmit label={t('remove')} variant="danger" />
                                 </form>
                               </div>
                             </td>
@@ -177,18 +177,19 @@ function AddDishForm({
   dishes: DishOption[];
   existing: string[];
 }) {
+  const t = useTranslations('cyclesAdmin');
   const [dishId, setDishId] = useState('');
   const taken = useMemo(() => new Set(existing), [existing]);
   const selected = dishes.find((d) => d.id === dishId);
 
   return (
-    <ActionForm action={addMenuItem} submitLabel="Add to this day" className="space-y-3">
+    <ActionForm action={addMenuItem} submitLabel={t('addToThisDay')} className="space-y-0">
       <input type="hidden" name="menuDayId" value={menuDayId} />
 
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_7rem]">
         <div>
           <label className="label text-xs" htmlFor={`dish-${menuDayId}`}>
-            Dish
+            {t('dishColumn')}
           </label>
           <select
             id={`dish-${menuDayId}`}
@@ -199,14 +200,14 @@ function AddDishForm({
             className="input"
           >
             <option value="" disabled>
-              Choose a dish…
+              {t('chooseADish')}
             </option>
             {groupByRestaurant(dishes).map(([restaurantName, group]) => (
               <optgroup key={restaurantName} label={restaurantName}>
                 {group.map((d) => (
                   <option key={d.id} value={d.id} disabled={taken.has(d.id)}>
                     {d.name} ({formatSen(d.priceSen)})
-                    {taken.has(d.id) ? ' · already added' : ''}
+                    {taken.has(d.id) ? t('alreadyAdded') : ''}
                   </option>
                 ))}
               </optgroup>
@@ -215,26 +216,26 @@ function AddDishForm({
         </div>
         <div>
           <label className="label text-xs" htmlFor={`price-${menuDayId}`}>
-            Price (RM)
+            {t('priceRm')}
           </label>
           <input
             id={`price-${menuDayId}`}
             name="price"
             inputMode="decimal"
             className="input"
-            placeholder={selected ? (selected.priceSen / 100).toFixed(2) : 'catalogue'}
+            placeholder={selected ? (selected.priceSen / 100).toFixed(2) : t('catalogue')}
           />
         </div>
         <div>
           <label className="label text-xs" htmlFor={`cap-${menuDayId}`}>
-            Qty limit
+            {t('qtyLimit')}
           </label>
           <input
             id={`cap-${menuDayId}`}
             name="capacity"
             inputMode="numeric"
             className="input"
-            placeholder="none"
+            placeholder={t('none')}
           />
         </div>
       </div>
@@ -243,21 +244,23 @@ function AddDishForm({
 }
 
 function EditItemDialog({ item }: { item: PlannerItem }) {
+  const t = useTranslations('cyclesAdmin');
+  const c = useTranslations('adminCommon');
   return (
     <Dialog
-      title={`Edit ${item.dishName}`}
+      title={t('editItem', { name: item.dishName })}
       width="max-w-sm"
       trigger={(open) => (
         <button type="button" className="btn-secondary btn-sm" onClick={open}>
-          Edit
+          {c('edit')}
         </button>
       )}
     >
       {() => (
-        <ActionForm action={updateMenuItem} submitLabel="Save" resetOnSuccess={false} className="space-y-3">
+        <ActionForm action={updateMenuItem} submitLabel={t('save')} resetOnSuccess={false} className="space-y-3">
           <input type="hidden" name="id" value={item.id} />
           <div>
-            <label className="label">Price for this week (RM)</label>
+            <label className="label">{t('priceForThisWeek')}</label>
             <input
               name="price"
               required
@@ -266,17 +269,17 @@ function EditItemDialog({ item }: { item: PlannerItem }) {
               className="input"
             />
             <p className="mt-1 text-xs text-slate-500">
-              Catalogue price is {formatSen(item.catalogPriceSen)}.
+              {t('cataloguePriceIs', { price: formatSen(item.catalogPriceSen) })}
             </p>
           </div>
           <div>
-            <label className="label">Daily capacity</label>
+            <label className="label">{t('dailyCapacity')}</label>
             <input
               name="capacity"
               inputMode="numeric"
               defaultValue={item.capacity ?? ''}
               className="input"
-              placeholder="Blank = unlimited"
+              placeholder={t('blankUnlimited')}
             />
           </div>
         </ActionForm>
