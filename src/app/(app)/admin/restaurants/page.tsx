@@ -60,7 +60,7 @@ export default async function RestaurantsPage() {
                         <div className="text-xs text-slate-400">{r.contactPhone}</div>
                       ) : null}
                     </td>
-                    <td className="num text-slate-600">{r._count.dishes}</td>
+                    <td className="num text-slate-600 text-left">{r._count.dishes}</td>
                     <td>
                       <span
                         className={`badge ${

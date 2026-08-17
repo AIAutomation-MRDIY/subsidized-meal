@@ -84,7 +84,7 @@ export default async function KitchenPage({
         </div>
       ) : null}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid gap-4 text-center sm:grid-cols-3">
         <Stat label={t('totalPortions')} value={totalPortions.toLocaleString()} />
         <Stat label={t('restaurants')} value={byRestaurant.size} />
         <Stat label={t('distinctDishes')} value={new Set(sheet.map((r) => r.dishName)).size} />
@@ -131,7 +131,7 @@ export default async function KitchenPage({
                             </td>
                             <td className="text-slate-700">{r.dishName}</td>
                             <td className="text-slate-600">{r.deliverySiteName}</td>
-                            <td className="num font-medium text-slate-900">{r.quantity}</td>
+                            <td className="num font-medium text-slate-900 text-left">{r.quantity}</td>
                           </tr>
                         )),
                       )}

@@ -79,7 +79,7 @@ export default async function SubsidiesPage() {
                       <td className="text-slate-600">
                         {r.scope === 'ALL' ? t('everyone') : (r.department ?? '—')}
                       </td>
-                      <td className="num text-slate-600">{r.priority}</td>
+                      <td className="num text-slate-600 text-left">{r.priority}</td>
                       <td className="text-xs text-slate-500">
                         {r.effectiveFrom || r.effectiveTo
                           ? `${r.effectiveFrom ? formatDate(r.effectiveFrom, 'long', locale) : t('windowAny')} → ${

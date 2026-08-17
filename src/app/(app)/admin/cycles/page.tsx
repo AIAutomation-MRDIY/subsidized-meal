@@ -95,10 +95,10 @@ export default async function CyclesPage() {
                         <td>
                           <PhaseBadge phase={phase} label={CYCLE_PHASE_LABEL[phase]} />
                         </td>
-                        <td className="num text-slate-600">{items}</td>
-                        <td className="num text-slate-600">{totals?._count._all ?? 0}</td>
-                        <td className="num text-slate-900">{formatSen(totals?._sum.netSen ?? 0)}</td>
-                        <td className="num text-emerald-700">{formatSen(totals?._sum.subsidySen ?? 0)}</td>
+                        <td className="num text-slate-600 text-left">{items}</td>
+                        <td className="num text-slate-600 text-left">{totals?._count._all ?? 0}</td>
+                        <td className="num text-slate-900 text-left">{formatSen(totals?._sum.netSen ?? 0)}</td>
+                        <td className="num text-emerald-700 text-left">{formatSen(totals?._sum.subsidySen ?? 0)}</td>
                         <td className="text-xs text-slate-500">{formatDateTime(c.orderCutoffAt, locale)}</td>
                         <td>
                           <div className="flex justify-end">

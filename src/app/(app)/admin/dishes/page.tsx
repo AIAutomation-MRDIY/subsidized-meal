@@ -112,7 +112,7 @@ export default async function DishesPage({
                         </td>
                         <td className="text-slate-600">{d.restaurant.name}</td>
                         <td className="text-slate-600">{d.category ?? '—'}</td>
-                        <td className="num font-medium text-slate-900">{formatSen(d.priceSen)}</td>
+                        <td className="num font-medium text-slate-900 text-left">{formatSen(d.priceSen)}</td>
                         <td>
                           <span
                             className={`badge ${

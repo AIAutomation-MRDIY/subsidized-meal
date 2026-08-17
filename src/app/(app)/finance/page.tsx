@@ -141,12 +141,12 @@ export default async function FinancePage({
                     <tr key={w.cycleId}>
                       <td className="font-medium text-slate-900">{w.label}</td>
                       <td className="text-xs text-slate-500">{w.status}</td>
-                      <td className="num text-slate-600">{w.orders}</td>
-                      <td className="num text-slate-600">{w.meals}</td>
-                      <td className="num text-slate-900">{formatSen(w.grossSen)}</td>
-                      <td className="num text-emerald-700">{formatSen(w.subsidySen)}</td>
-                      <td className="num text-slate-900">{formatSen(w.netSen)}</td>
-                      <td className="num text-slate-600">
+                      <td className="num text-slate-600 text-left">{w.orders}</td>
+                      <td className="num text-slate-600 text-left">{w.meals}</td>
+                      <td className="num text-slate-900 text-left">{formatSen(w.grossSen)}</td>
+                      <td className="num text-emerald-700 text-left">{formatSen(w.subsidySen)}</td>
+                      <td className="num text-slate-900 text-left">{formatSen(w.netSen)}</td>
+                      <td className="num text-slate-600 text-left">
                         {w.grossSen ? `${Math.round((w.subsidySen / w.grossSen) * 100)}%` : '—'}
                       </td>
                       {exportable ? (
@@ -185,10 +185,10 @@ export default async function FinancePage({
                     {departments.map((d) => (
                       <tr key={d.department}>
                         <td className="font-medium text-slate-900">{d.department}</td>
-                        <td className="num text-slate-600">{d.people}</td>
-                        <td className="num text-slate-600">{d.orders}</td>
-                        <td className="num text-emerald-700">{formatSen(d.subsidySen)}</td>
-                        <td className="num text-slate-900">{formatSen(d.netSen)}</td>
+                        <td className="num text-slate-600 text-left">{d.people}</td>
+                        <td className="num text-slate-600 text-left">{d.orders}</td>
+                        <td className="num text-emerald-700 text-left">{formatSen(d.subsidySen)}</td>
+                        <td className="num text-slate-900 text-left">{formatSen(d.netSen)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -241,7 +241,7 @@ export default async function FinancePage({
                               <div className="text-xs text-slate-400">{p.order.user.staffId}</div>
                             ) : null}
                           </td>
-                          <td className="num text-slate-900">{formatSen(p.amountSen)}</td>
+                          <td className="num text-slate-900 text-left">{formatSen(p.amountSen)}</td>
                           <td>
                             <StatusBadge status={p.status} />
                             {p.failureReason ? (

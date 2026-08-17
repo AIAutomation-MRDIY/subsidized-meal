@@ -46,7 +46,7 @@ export default async function DeliverySitesPage() {
                 {sites.map((s) => (
                   <tr key={s.id}>
                     <td className="font-medium text-slate-900">{s.name}</td>
-                    <td className="num text-slate-600">{s._count.orders}</td>
+                    <td className="num text-slate-600 text-left">{s._count.orders}</td>
                     <td>
                       <span
                         className={`badge ${
