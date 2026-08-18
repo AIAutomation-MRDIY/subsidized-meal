@@ -2,7 +2,7 @@ import { getLocale, getTranslations } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
-import { CYCLE_PHASE_LABEL, cyclePhase, formatDate, formatWeekRange, toDateKey } from '@/lib/cycle';
+import { cyclePhase, formatDate, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { kitchenSheet } from '@/lib/reporting';
 import { PageHeader, Section, EmptyState, PhaseBadge, Alert, Stat } from '@/components/ui';
 
@@ -53,7 +53,7 @@ export default async function KitchenPage({
         title={t('title')}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
-            <PhaseBadge phase={phase} label={CYCLE_PHASE_LABEL[phase]} />
+            <PhaseBadge phase={phase} />
             <span>{formatWeekRange(selected.serviceWeekStart, locale)}</span>
           </span>
         }

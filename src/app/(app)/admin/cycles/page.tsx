@@ -5,7 +5,6 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { formatSen } from '@/lib/money';
 import {
-  CYCLE_PHASE_LABEL,
   cyclePhase,
   formatDateTime,
   formatWeekRange,
@@ -67,7 +66,7 @@ export default async function CyclesPage() {
                 <thead>
                   <tr>
                     <th>{t('serviceWeek')}</th>
-                    <th>{t('status')}</th>
+                    <th className="!text-center">{t('status')}</th>
                     <th className="num">{t('dishes')}</th>
                     <th className="num">{t('paidOrders')}</th>
                     <th className="num">{t('staffPays')}</th>
@@ -92,8 +91,8 @@ export default async function CyclesPage() {
                           </Link>
                           {c.title ? <div className="text-xs text-slate-500">{c.title}</div> : null}
                         </td>
-                        <td>
-                          <PhaseBadge phase={phase} label={CYCLE_PHASE_LABEL[phase]} />
+                        <td className="text-center">
+                          <PhaseBadge phase={phase} />
                         </td>
                         <td className="num text-slate-600 text-left">{items}</td>
                         <td className="num text-slate-600 text-left">{totals?._count._all ?? 0}</td>
@@ -102,7 +101,7 @@ export default async function CyclesPage() {
                         <td className="text-xs text-slate-500">{formatDateTime(c.orderCutoffAt, locale)}</td>
                         <td>
                           <div className="flex justify-end">
-                            <Link href={`/admin/cycles/${c.id}`} className="btn-secondary btn-sm">
+                            <Link href={`/admin/cycles/${c.id}`} className="btn-secondary btn-sm whitespace-nowrap">
                               {t('open')}
                             </Link>
                           </div>

@@ -493,5 +493,24 @@
     "orders": "Pesanan",
     "staffPaid": "Kakitangan bayar",
     "companySubsidy": "Subsidi syarikat"
+  },
+  "cyclePhase": {
+    "DRAFT": "Draf",
+    "SCHEDULED": "Dijadualkan",
+    "OPEN": "Pesanan dibuka",
+    "CLOSED": "Pesanan ditutup",
+    "SERVING": "Sedang dihidangkan",
+    "COMPLETED": "Selesai",
+    "CANCELLED": "Dibatalkan"
+  },
+  "orderStatus": {
+    "PAID": "Dibayar",
+    "SUCCEEDED": "Dibayar",
+    "AWAITING_PAYMENT": "Menunggu pembayaran",
+    "PENDING": "Menunggu",
+    "CART": "Troli",
+    "CANCELLED": "Dibatalkan",
+    "FAILED": "Gagal",
+    "REFUNDED": "Dikembalikan"
   }
 }

@@ -493,5 +493,24 @@
     "orders": "订单数",
     "staffPaid": "员工已付",
     "companySubsidy": "公司补贴"
+  },
+  "cyclePhase": {
+    "DRAFT": "草稿",
+    "SCHEDULED": "已排程",
+    "OPEN": "开放点餐",
+    "CLOSED": "停止点餐",
+    "SERVING": "供餐中",
+    "COMPLETED": "已完成",
+    "CANCELLED": "已取消"
+  },
+  "orderStatus": {
+    "PAID": "已付款",
+    "SUCCEEDED": "已付款",
+    "AWAITING_PAYMENT": "等待付款",
+    "PENDING": "待处理",
+    "CART": "购物车",
+    "CANCELLED": "已取消",
+    "FAILED": "失败",
+    "REFUNDED": "已退款"
   }
 }

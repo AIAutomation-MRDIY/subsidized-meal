@@ -6,7 +6,6 @@ import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/session';
 import { formatSen } from '@/lib/money';
 import {
-  CYCLE_PHASE_LABEL,
   addWeeks,
   cyclePhase,
   dateOnly,
@@ -86,7 +85,7 @@ export default async function CycleDetailPage({
         title={formatWeekRange(cycle.serviceWeekStart, locale)}
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
-            <PhaseBadge phase={phase} label={CYCLE_PHASE_LABEL[phase]} />
+            <PhaseBadge phase={phase} />
             {cycle.title ? <span>{cycle.title}</span> : null}
             {phase === 'OPEN' ? (
               <span className="font-medium text-emerald-700">

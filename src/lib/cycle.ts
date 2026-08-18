@@ -13,7 +13,7 @@
  * Date-only columns are stored as UTC midnight, matching Prisma's `@db.Date`.
  */
 
-import type { CycleStatus, MenuCycle } from '@prisma/client';
+import type { MenuCycle } from '@prisma/client';
 
 export const APP_TIMEZONE = process.env.APP_TIMEZONE ?? 'Asia/Kuala_Lumpur';
 
@@ -311,21 +311,3 @@ export function formatWeekRange(serviceWeekStart: Date | string, locale?: string
   const y = new Intl.DateTimeFormat(intlLocale(locale), { timeZone: 'UTC', year: 'numeric' }).format(end);
   return `${formatDate(start, 'short', locale)} - ${formatDate(end, 'short', locale)} ${y}`;
 }
-
-export const CYCLE_PHASE_LABEL: Record<CyclePhase, string> = {
-  DRAFT: 'Draft',
-  SCHEDULED: 'Scheduled',
-  OPEN: 'Ordering open',
-  CLOSED: 'Ordering closed',
-  SERVING: 'Being served',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-};
-
-export const CYCLE_STATUS_LABEL: Record<CycleStatus, string> = {
-  DRAFT: 'Draft',
-  PUBLISHED: 'Published',
-  CLOSED: 'Closed',
-  FULFILLED: 'Fulfilled',
-  CANCELLED: 'Cancelled',
-};

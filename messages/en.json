@@ -493,5 +493,24 @@
     "orders": "Orders",
     "staffPaid": "Staff paid",
     "companySubsidy": "Company subsidy"
+  },
+  "cyclePhase": {
+    "DRAFT": "Draft",
+    "SCHEDULED": "Scheduled",
+    "OPEN": "Ordering open",
+    "CLOSED": "Ordering closed",
+    "SERVING": "Being served",
+    "COMPLETED": "Completed",
+    "CANCELLED": "Cancelled"
+  },
+  "orderStatus": {
+    "PAID": "Paid",
+    "SUCCEEDED": "Paid",
+    "AWAITING_PAYMENT": "Awaiting payment",
+    "PENDING": "Pending",
+    "CART": "Cart",
+    "CANCELLED": "Cancelled",
+    "FAILED": "Failed",
+    "REFUNDED": "Refunded"
   }
 }
