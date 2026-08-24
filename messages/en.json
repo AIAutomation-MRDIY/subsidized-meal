@@ -155,7 +155,12 @@
     "delete": "Delete",
     "saveChanges": "Save changes",
     "name": "Name",
-    "status": "Status"
+    "status": "Status",
+    "pagerShowing": "Showing {from}-{to} of {total}",
+    "pagerPrevious": "Previous",
+    "pagerNext": "Next",
+    "pagerPageOf": "Page {page} of {totalPages}",
+    "pagerPerPage": "Per page"
   },
   "restaurantsAdmin": {
     "title": "Restaurants",

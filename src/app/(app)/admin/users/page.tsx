@@ -7,6 +7,7 @@ import { ROLE_LABEL } from '@/lib/rbac';
 import { formatDateTime } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, Alert } from '@/components/ui';
 import { InlineSubmit } from '@/components/action-form';
+import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
 
 import { toggleUserActive } from './actions';
 import { AddUserButton, EditUserDialog, ResetPasswordDialog } from './user-forms';
@@ -20,30 +21,40 @@ const ROLE_STYLE: Record<string, string> = {
   USER: 'bg-slate-100 text-slate-700',
 };
 
+const DEFAULT_PAGE_SIZE = 25;
+
 export default async function UsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; role?: string }>;
+  searchParams: Promise<{ q?: string; role?: string; page?: string; pageSize?: string }>;
 }) {
   const me = await requireCapability('users:manage');
   const params = await searchParams;
   const t = await getTranslations('usersAdmin');
   const locale = await getLocale();
+  const page = parsePage(params.page);
+  const pageSize = parsePageSize(params.pageSize, DEFAULT_PAGE_SIZE);
 
-  const users = await prisma.user.findMany({
-    where: {
-      role: params.role && params.role !== 'all' ? (params.role as never) : undefined,
-      OR: params.q
-        ? [
-            { name: containsInsensitive(params.q) },
-            { email: containsInsensitive(params.q) },
-            { staffId: containsInsensitive(params.q) },
-          ]
-        : undefined,
-    },
-    orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
-    take: 300,
-  });
+  const where = {
+    role: params.role && params.role !== 'all' ? (params.role as never) : undefined,
+    OR: params.q
+      ? [
+          { name: containsInsensitive(params.q) },
+          { email: containsInsensitive(params.q) },
+          { staffId: containsInsensitive(params.q) },
+        ]
+      : undefined,
+  };
+
+  const [total, users] = await Promise.all([
+    prisma.user.count({ where }),
+    prisma.user.findMany({
+      where,
+      orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
 
   const departmentRows = await prisma.user.findMany({
     where: { department: { not: null } },
@@ -63,7 +74,7 @@ export default async function UsersPage({
 
       <Section
         title={t('accounts')}
-          description={t('shownCount', { count: users.length })}
+          description={t('shownCount', { count: total })}
           action={
             <form method="get" className="flex gap-2">
               <select name="role" defaultValue={params.role ?? 'all'} className="input !w-32 !py-1 text-xs">
@@ -150,6 +161,14 @@ export default async function UsersPage({
                   ))}
                 </tbody>
               </table>
+
+              <Pagination
+                basePath="/admin/users"
+                page={page}
+                pageSize={pageSize}
+                total={total}
+                searchParams={{ q: params.q, role: params.role }}
+              />
             </div>
           )}
         </Section>
