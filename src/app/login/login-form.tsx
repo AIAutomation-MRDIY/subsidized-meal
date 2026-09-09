@@ -16,13 +16,22 @@ function SubmitButton() {
   );
 }
 
-export function LoginForm({ ssoEnabled, ldapEnabled }: { ssoEnabled: boolean; ldapEnabled: boolean }) {
+export function LoginForm({
+  ssoEnabled,
+  ldapEnabled,
+  embed,
+}: {
+  ssoEnabled: boolean;
+  ldapEnabled: boolean;
+  embed: boolean;
+}) {
   const t = useTranslations('login');
   const [state, formAction] = useActionState<LoginState, FormData>(loginAction, {});
 
   return (
     <div className="space-y-4">
       <form action={formAction} className="space-y-4">
+        {embed ? <input type="hidden" name="embed" value="1" /> : null}
         {state.error ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
             {state.error}
@@ -63,7 +72,6 @@ export function LoginForm({ ssoEnabled, ldapEnabled }: { ssoEnabled: boolean; ld
       </form>
 
       {ldapEnabled ? <p className="text-center text-xs text-slate-500">{t('ldapHint')}</p> : null}
-
       {ssoEnabled ? (
         <>
           <div className="flex items-center gap-3">
