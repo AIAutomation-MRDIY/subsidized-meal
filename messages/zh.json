@@ -75,6 +75,7 @@
     "orderConfirmed": "订单已确认 — 本周无需付款。",
     "awaitingPayment": "正在等待您 {amount} 的付款确认，通常只需几秒钟 — 请稍后刷新页面。",
     "continueToPayment": "继续付款",
+    "popupBlocked": "如果付款窗口没有打开,请允许此网站的弹出窗口,然后点击继续付款。",
     "cancelled": "此订单已取消",
     "meals": "餐点",
     "lineItems": "共 {count} 项",
@@ -140,7 +141,7 @@
     "incorrectCredentials": "邮箱或密码不正确。",
     "ssoDisabled": "此环境未启用单点登录。",
     "ssoStateExpired": "登录链接已过期，请重试。",
-    "ssoFailed": "单点登录失败。联系您的管理员。",
+    "ssoFailed": "单点登录失败。请重试，或使用邮箱和密码登录。",
     "ssoInactive": "此账户已停用，请联系您的管理员。",
     "ssoNotProvisioned": "您的帐户尚未设置，请联系管理员为您添加账户。",
     "contactCustom": "遇到问题？请联系 {email}"
