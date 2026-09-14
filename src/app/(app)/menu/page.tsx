@@ -121,6 +121,10 @@ export default async function MenuPage({
   // that item is paid for and done. A day with no item at all is always
   // still open, regardless of how many other days are locked.
   const chosenMenuItemIds = new Set(orderItems.map((item) => item.menuItemId));
+  // Lets a chosen-and-locked dish's tick render as "pending" vs "paid" -
+  // only meaningful for chosen items, so a lookup keyed by menuItemId is
+  // enough (one order item per menu item, per user, per cycle).
+  const orderStatusByMenuItemId = new Map(orderItems.map((item) => [item.menuItemId, item.orderStatus]));
   const lockedDayKeys = new Set(
     orderItems.filter((item) => item.orderStatus !== 'CART').map((item) => toDateKey(item.serviceDate)),
   );
@@ -130,13 +134,23 @@ export default async function MenuPage({
     .filter((d) => d._count.items > 0)
     .every((d) => lockedDayKeys.has(toDateKey(d.serviceDate)));
 
+  // A locked day is only truly "placed" once its order is PAID - one still
+  // sitting at AWAITING_PAYMENT is submitted but not confirmed, so the
+  // header must not read as fully paid until every locked item actually is.
+  const lockedItems = orderItems.filter((item) => item.orderStatus !== 'CART');
+  const anyLockedAwaitingPayment = lockedItems.some((item) => item.orderStatus === 'AWAITING_PAYMENT');
+
   const header = (
     <PageHeader
       title={t('title', { range: formatWeekRange(cycle.serviceWeekStart, locale) })}
       subtitle={
         <span className="flex flex-wrap items-center gap-2">
           {allOrderableDaysLocked ? (
-            <span className="badge bg-emerald-100 text-emerald-800">{t('orderPlaced')}</span>
+            anyLockedAwaitingPayment ? (
+              <span className="badge bg-amber-100 text-amber-800">{t('awaitingPayment')}</span>
+            ) : (
+              <span className="badge bg-emerald-100 text-emerald-800">{t('orderPlaced')}</span>
+            )
           ) : (
             <>
               <span className="badge bg-emerald-100 text-emerald-800">{t('orderingOpen')}</span>
@@ -202,6 +216,7 @@ export default async function MenuPage({
     tags: decodeTags(item.dish.tags),
     priceSen: employeePriceFor(item.priceSen, activeDay.serviceDate, rules, user.department),
     remaining: remaining.get(item.id) ?? null,
+    orderStatus: orderStatusByMenuItemId.get(item.id) ?? null,
     chosen: chosenMenuItemIds.has(item.id),
   }));
 
@@ -211,6 +226,7 @@ export default async function MenuPage({
     dayLabel: `${formatDate(item.serviceDate, 'weekday', locale)} · ${formatDate(item.serviceDate, undefined, locale)}`,
     dishName: item.dishName,
     netSen: item.netSen,
+    status: item.orderStatus,
     locked: item.orderStatus !== 'CART',
   }));
 

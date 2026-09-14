@@ -45,7 +45,13 @@
     "nothingToPay": "Tiada bayaran untuk hari yang baru dipilih.",
     "savedAsYouGo": "Disimpan secara automatik. Disahkan sebaik pembayaran berjaya.",
     "awaitingPaymentBanner": "Kami sedang menunggu pengesahan pembayaran untuk sebahagian minggu ini. Muat semula sebentar lagi, atau buka pesanan anda untuk teruskan pembayaran.",
-    "paid": "Telah dibayar"
+    "paid": "Telah dibayar",
+    "awaitingPayment": "Menunggu pembayaran",
+    "inCart": "Dalam troli",
+    "cancelled": "Dibatalkan",
+    "refunded": "Dikembalikan",
+    "pending": "Belum bayar",
+    "yourChoicePending": "Pilihan anda · menunggu pembayaran"
   },
   "orders": {
     "title": "Pesanan saya",
