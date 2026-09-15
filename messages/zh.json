@@ -174,7 +174,8 @@
     "pagerPrevious": "上一页",
     "pagerNext": "下一页",
     "pagerPageOf": "第 {page} / {totalPages} 页",
-    "pagerPerPage": "每页"
+    "pagerPerPage": "每页",
+    "exportCsv": "导出 CSV"
   },
   "restaurantsAdmin": {
     "title": "餐厅",
@@ -186,6 +187,9 @@
     "addRestaurant": "添加餐厅",
     "addARestaurant": "添加餐厅",
     "editRestaurant": "编辑 {name}",
+    "code": "代码",
+    "codePlaceholder": "留空则自动生成（R-001）",
+    "codeHint": "可选。用于日后每周菜单导入时匹配此餐厅的简短唯一代码（字母、数字、- 和 _）。留空将自动生成顺序代码（R-001、R-002……）。",
     "cuisine": "菜系",
     "contact": "联系人",
     "dishes": "菜品数",
@@ -226,6 +230,9 @@
     "noDishesMatchHint": "请尝试清除筛选条件，或在右侧添加菜品。",
     "dish": "菜品",
     "restaurant": "餐厅",
+    "code": "代码",
+    "codePlaceholder": "留空则自动生成（D-001）",
+    "codeHint": "可选。简短代码（字母、数字、- 和 _），在所有菜品中唯一，用于日后每周菜单导入时匹配此菜品。留空将自动生成顺序代码（D-001、D-002……）。",
     "category": "分类",
     "price": "价格",
     "deleteConfirm": "删除 {name}？如果它曾出现在菜单中，将改为停用。",

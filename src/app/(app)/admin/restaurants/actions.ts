@@ -7,9 +7,17 @@ import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
 import { CACHE_TAGS } from '@/lib/cache';
+import { CODE_MAX_LENGTH, CODE_PATTERN, generateUniqueCode, nextSequentialCode, normalizeCode } from '@/lib/codes';
 import type { ActionState } from '@/components/action-form';
 
 const restaurantSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .max(CODE_MAX_LENGTH)
+    .regex(CODE_PATTERN, 'Code can only contain letters, numbers, - and _.')
+    .optional()
+    .or(z.literal('')),
   name: z.string().trim().min(2, 'Name must be at least 2 characters.').max(120),
   cuisine: z.string().trim().max(60).optional().or(z.literal('')),
   description: z.string().trim().max(500).optional().or(z.literal('')),
@@ -23,6 +31,20 @@ function blankToNull(v: string | undefined): string | null {
   return t ? t : null;
 }
 
+/**
+ * Auto-generates the next "R-001"-style code, used when the admin leaves
+ * the code field blank. Unique across every restaurant.
+ */
+async function autoCode(): Promise<string> {
+  const existing = await prisma.restaurant.findMany({
+    where: { code: { not: null } },
+    select: { code: true },
+  });
+  const base = nextSequentialCode('R', existing.map((r) => r.code));
+  const isTaken = (code: string) => prisma.restaurant.findUnique({ where: { code } }).then(Boolean);
+  return generateUniqueCode(base, isTaken);
+}
+
 export async function createRestaurant(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await assertCapability('catalogue:manage');
 
@@ -33,8 +55,15 @@ export async function createRestaurant(_prev: ActionState, formData: FormData): 
   const clash = await prisma.restaurant.findUnique({ where: { name: d.name } });
   if (clash) return { error: `A restaurant named "${d.name}" already exists.` };
 
+  const code = normalizeCode(d.code);
+  if (code) {
+    const codeClash = await prisma.restaurant.findUnique({ where: { code } });
+    if (codeClash) return { error: `A restaurant with code "${code}" already exists.` };
+  }
+
   const created = await prisma.restaurant.create({
     data: {
+      code: code ?? (await autoCode()),
       name: d.name,
       cuisine: blankToNull(d.cuisine),
       description: blankToNull(d.description),
@@ -63,9 +92,16 @@ export async function updateRestaurant(_prev: ActionState, formData: FormData): 
   const clash = await prisma.restaurant.findFirst({ where: { name: d.name, NOT: { id } } });
   if (clash) return { error: `Another restaurant is already named "${d.name}".` };
 
+  const code = normalizeCode(d.code);
+  if (code) {
+    const codeClash = await prisma.restaurant.findFirst({ where: { code, NOT: { id } } });
+    if (codeClash) return { error: `Another restaurant already uses code "${code}".` };
+  }
+
   await prisma.restaurant.update({
     where: { id },
     data: {
+      code: code ?? (await autoCode()),
       name: d.name,
       cuisine: blankToNull(d.cuisine),
       description: blankToNull(d.description),
