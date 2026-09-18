@@ -19,6 +19,12 @@ import {
   todayInAppTz,
   zonedToUtc,
 } from '@/lib/cycle';
+import {
+  IMPORT_MAX_FILE_BYTES,
+  IMPORT_MAX_ROWS,
+  parseMenuImportFile,
+  resolveMenuImportRows,
+} from '@/lib/menu-import';
 import type { ActionState } from '@/components/action-form';
 
 // ---------------------------------------------------------------------------
@@ -403,4 +409,246 @@ export async function copyPreviousWeek(formData: FormData): Promise<void> {
 
   await audit(actor.id, 'cycle.copy_previous', 'MenuCycle', cycleId, { copied: rows.length });
   revalidatePath(`/admin/cycles/${cycleId}`);
+}
+
+// ---------------------------------------------------------------------------
+// Weekly-menu CSV/Excel import
+// ---------------------------------------------------------------------------
+
+export type MenuImportRejectedRow = {
+  row: number;
+  restaurantCode: string;
+  restaurantName: string;
+  dishCode: string;
+  dishName: string;
+  day: string;
+  reason: string;
+};
+
+export type MenuImportState = {
+  error?: string;
+  result?: {
+    fileName: string;
+    /** true = nothing was written; every row must be fixed before re-uploading the whole file. */
+    aborted: boolean;
+    importedCount: number;
+    skippedCount: number;
+    createdRestaurants: string[];
+    createdDishes: string[];
+    rejected: MenuImportRejectedRow[];
+  };
+};
+
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+
+/**
+ * Bulk-adds dishes to a draft menu from an uploaded CSV/Excel file.
+ *
+ * All-or-nothing: every row is validated first, and if even one row fails
+ * (see lib/menu-import.ts for the exact checks), nothing in the file is
+ * written - the admin fixes the reported rows and re-uploads the whole
+ * file. Only once every row passes does anything get created.
+ */
+export async function importWeeklyMenu(
+  _prev: MenuImportState,
+  formData: FormData,
+): Promise<MenuImportState> {
+  const actor = await assertCapability('menu:plan');
+
+  const cycleId = String(formData.get('cycleId') ?? '');
+  if (!cycleId) return { error: 'Missing menu.' };
+
+  const cycle = await prisma.menuCycle.findUnique({
+    where: { id: cycleId },
+    include: { days: { orderBy: { serviceDate: 'asc' } } },
+  });
+  if (!cycle) return { error: 'Menu not found.' };
+  if (cycle.status !== 'DRAFT') {
+    return { error: 'This menu is published. Unpublish it before importing dishes.' };
+  }
+  if (cycle.days.length === 0) return { error: 'This menu has no service days.' };
+
+  const file = formData.get('file');
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: 'Choose a CSV or Excel file to upload.' };
+  }
+  if (file.size > IMPORT_MAX_FILE_BYTES) {
+    return { error: `File is too large (max ${Math.round(IMPORT_MAX_FILE_BYTES / 1024 / 1024)} MB).` };
+  }
+
+  const bytes = await file.arrayBuffer();
+  const parsed = parseMenuImportFile(bytes);
+  if ('error' in parsed) return { error: parsed.error };
+  if (parsed.rows.length === 0) return { error: 'That file has no data rows.' };
+  if (parsed.rows.length > IMPORT_MAX_ROWS) {
+    return { error: `That file has more than ${IMPORT_MAX_ROWS} rows - split it into smaller uploads.` };
+  }
+
+  const [restaurants, dishes] = await Promise.all([
+    prisma.restaurant.findMany({ select: { id: true, code: true, name: true } }),
+    prisma.dish.findMany({
+      select: { id: true, code: true, name: true, restaurantId: true, priceSen: true },
+    }),
+  ]);
+
+  const resolved = resolveMenuImportRows(parsed.rows, { restaurants, dishes });
+
+  // --- Validation pass: collect every problem, write nothing yet. ---
+  const rejected: MenuImportRejectedRow[] = [];
+  for (const row of resolved) {
+    if (!row.ok) {
+      rejected.push({
+        row: row.rowNumber,
+        restaurantCode: row.raw.restaurantCode,
+        restaurantName: row.raw.restaurantName,
+        dishCode: row.raw.dishCode,
+        dishName: row.raw.dishName,
+        day: row.raw.day,
+        reason: row.reason,
+      });
+      continue;
+    }
+    if (!cycle.days[row.weekdayIndex]) {
+      rejected.push({
+        row: row.rowNumber,
+        restaurantCode: row.restaurant.code,
+        restaurantName: row.restaurant.name,
+        dishCode: row.dish.code,
+        dishName: row.dish.name,
+        day: WEEKDAY_LABELS[row.weekdayIndex] ?? '',
+        reason: "That day isn't part of this menu.",
+      });
+    }
+  }
+
+  if (rejected.length > 0) {
+    await audit(actor.id, 'cycle.import_menu_rejected', 'MenuCycle', cycleId, {
+      fileName: file.name,
+      totalRows: resolved.length,
+      rejectedRows: rejected.length,
+    });
+    return {
+      result: {
+        fileName: file.name,
+        aborted: true,
+        importedCount: 0,
+        skippedCount: 0,
+        createdRestaurants: [],
+        createdDishes: [],
+        rejected,
+      },
+    };
+  }
+
+  // --- Every row is valid: write them all inside one transaction, so a
+  // rare mid-write failure (e.g. a concurrent edit) rolls everything back
+  // instead of leaving a half-applied menu. ---
+  const okRows = resolved.filter((r): r is Extract<typeof r, { ok: true }> => r.ok);
+
+  const createdRestaurants: string[] = [];
+  const createdDishes: string[] = [];
+  let importedCount = 0;
+  let skippedCount = 0;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const dayIds = cycle.days.map((d) => d.id);
+      const counts = await tx.menuItem.groupBy({
+        by: ['menuDayId'],
+        where: { menuDayId: { in: dayIds } },
+        _count: { _all: true },
+      });
+      const sortOrderByDay = new Map<string, number>(dayIds.map((id) => [id, 0]));
+      for (const c of counts) sortOrderByDay.set(c.menuDayId, c._count._all);
+
+      const existingDishPriceById = new Map(dishes.map((d) => [d.id, d.priceSen]));
+      const restaurantIdByCode = new Map<string, string>();
+      const dishIdByCode = new Map<string, { id: string; priceSen: number }>();
+
+      for (const row of okRows) {
+        const dayId = cycle.days[row.weekdayIndex].id;
+
+        let restaurantId = row.restaurant.existingId ?? restaurantIdByCode.get(row.restaurant.code);
+        if (!restaurantId) {
+          const created = await tx.restaurant.create({
+            data: { code: row.restaurant.code, name: row.restaurant.name },
+          });
+          restaurantId = created.id;
+          restaurantIdByCode.set(row.restaurant.code, restaurantId);
+          createdRestaurants.push(`${row.restaurant.name} (${row.restaurant.code})`);
+        }
+
+        let dish = dishIdByCode.get(row.dish.code);
+        if (!dish && row.dish.existingId) {
+          dish = { id: row.dish.existingId, priceSen: existingDishPriceById.get(row.dish.existingId)! };
+        }
+        if (!dish) {
+          // New dish: priceSen is guaranteed by resolveMenuImportRows when existingId is null.
+          const created = await tx.dish.create({
+            data: {
+              restaurantId,
+              code: row.dish.code,
+              name: row.dish.name,
+              priceSen: row.priceSen!,
+            },
+          });
+          dish = { id: created.id, priceSen: created.priceSen };
+          dishIdByCode.set(row.dish.code, dish);
+          createdDishes.push(`${row.dish.name} (${row.dish.code})`);
+        }
+
+        const already = await tx.menuItem.findUnique({
+          where: { menuDayId_dishId: { menuDayId: dayId, dishId: dish.id } },
+        });
+        if (already) {
+          skippedCount++;
+          continue;
+        }
+
+        const sortOrder = sortOrderByDay.get(dayId) ?? 0;
+        await tx.menuItem.create({
+          data: {
+            menuDayId: dayId,
+            dishId: dish.id,
+            priceSen: row.priceSen ?? dish.priceSen,
+            capacity: row.capacity,
+            sortOrder,
+          },
+        });
+        sortOrderByDay.set(dayId, sortOrder + 1);
+        importedCount++;
+      }
+    });
+  } catch (e) {
+    await audit(actor.id, 'cycle.import_menu_failed', 'MenuCycle', cycleId, {
+      fileName: file.name,
+      error: (e as Error).message,
+    });
+    return {
+      error:
+        'Something changed in the catalogue while this file was being saved, so nothing was added. Please try uploading again.',
+    };
+  }
+
+  await audit(actor.id, 'cycle.import_menu', 'MenuCycle', cycleId, {
+    fileName: file.name,
+    imported: importedCount,
+    skipped: skippedCount,
+  });
+
+  revalidatePath(`/admin/cycles/${cycleId}`);
+  revalidatePath('/admin/restaurants');
+  revalidatePath('/admin/dishes');
+
+  return {
+    result: {
+      fileName: file.name,
+      aborted: false,
+      importedCount,
+      skippedCount,
+      createdRestaurants,
+      createdDishes,
+      rejected: [],
+    },
+  };
 }
