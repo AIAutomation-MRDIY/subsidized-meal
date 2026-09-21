@@ -39,17 +39,17 @@ export function LoginForm({
         ) : null}
 
         <div>
-          <label htmlFor="email" className="label">
-            {t('workEmail')}
+          <label htmlFor="identifier" className="label">
+            {t('emailOrStaffId')}
           </label>
           <input
-            id="email"
-            name="email"
-            type="email"
+            id="identifier"
+            name="identifier"
+            type="text"
             autoComplete="username"
             required
             className="input"
-            placeholder="name@mrdiy.com"
+            placeholder={t('emailOrStaffIdPlaceholder')}
           />
         </div>
 
@@ -72,6 +72,7 @@ export function LoginForm({
       </form>
 
       {ldapEnabled ? <p className="text-center text-xs text-slate-500">{t('ldapHint')}</p> : null}
+
       {ssoEnabled ? (
         <>
           <div className="flex items-center gap-3">
