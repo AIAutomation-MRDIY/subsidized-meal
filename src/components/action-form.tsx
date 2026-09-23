@@ -11,16 +11,22 @@ export const EMPTY_STATE: ActionState = {};
 function Submit({
   label,
   variant = 'primary',
+  size = 'default',
 }: {
   label: string;
   variant?: 'primary' | 'secondary' | 'danger';
+  /** 'sm' matches the compact h-8 row height used for inline forms next to
+   * plain inputs (see reception/delivery-row.tsx) - default is unchanged
+   * everywhere else that doesn't pass this. */
+  size?: 'default' | 'sm';
 }) {
   const t = useTranslations('common');
   const { pending } = useFormStatus();
   const cls =
     variant === 'danger' ? 'btn-danger' : variant === 'secondary' ? 'btn-secondary' : 'btn-primary';
+  const sizeCls = size === 'sm' ? ' btn-sm h-8' : '';
   return (
-    <button type="submit" className={cls} disabled={pending}>
+    <button type="submit" className={cls + sizeCls} disabled={pending}>
       {pending ? t('working') : label}
     </button>
   );
@@ -35,20 +41,32 @@ export function ActionForm({
   children,
   submitLabel,
   variant = 'primary',
+  size = 'default',
   className,
   resetOnSuccess = true,
   footer,
   onSuccess,
+  inline = false,
 }: {
   action: (prev: ActionState, formData: FormData) => Promise<ActionState>;
   children: ReactNode;
   submitLabel: string;
   variant?: 'primary' | 'secondary' | 'danger';
+  size?: 'default' | 'sm';
   className?: string;
   resetOnSuccess?: boolean;
   footer?: ReactNode;
   /** Fired once after a successful submit - dialogs use it to close. */
   onSuccess?: () => void;
+  /** True when `className` lays the fields out as a single row the button
+   * sits in (e.g. an inline table-row form) rather than the usual stacked
+   * fields. Drops the button row's top margin, which otherwise assumes
+   * the button is the next stacked block below the fields - with
+   * `align-items: center` on a shared row, that unconditional top margin
+   * makes only the button's margin box taller than its siblings, so
+   * centering the boxes still leaves the button's visible content sitting
+   * lower than the inputs beside it (see reception/delivery-row.tsx). */
+  inline?: boolean;
 }) {
   const [state, formAction] = useActionState(action, EMPTY_STATE);
   const ref = useRef<HTMLFormElement>(null);
@@ -73,8 +91,8 @@ export function ActionForm({
           {state.success}
         </p>
       ) : null}
-      <div className="mt-3 flex items-center gap-2">
-        <Submit label={submitLabel} variant={variant} />
+      <div className={inline ? 'flex items-center gap-2' : 'mt-3 flex items-center gap-2'}>
+        <Submit label={submitLabel} variant={variant} size={size} />
         {footer}
       </div>
     </form>

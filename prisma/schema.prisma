@@ -27,6 +27,7 @@ enum Role {
   ADMIN
   ANALYTICS
   FINANCE
+  RECEPTION
   USER
 }
 
@@ -136,10 +137,21 @@ model User {
   /// the field back to blank in Admin -> Users unlocks it again.
   defaultDeliverySiteLocked Boolean       @default(false)
 
+  /// Restricts a RECEPTION account to confirming deliveries for one site
+  /// only (enforced in reception/actions.ts, not just hidden in the UI).
+  /// Null means this person can see and confirm every site - appropriate
+  /// for someone covering several sites, but not the norm. Meaningless for
+  /// any other role and always cleared back to null if the role changes
+  /// away from RECEPTION (see admin/users/actions.ts).
+  receptionSiteId           String?
+  receptionSite             DeliverySite? @relation("UserReceptionSite", fields: [receptionSiteId], references: [id], onDelete: SetNull)
+
   orders       Order[]
   createdCycles MenuCycle[] @relation("CycleCreatedBy")
   auditLogs    AuditLog[]
   settingsUpdates AppSettings[] @relation("SettingsUpdatedBy")
+  /// Deliveries this person (typically RECEPTION) has confirmed as arrived.
+  deliveryConfirmations DeliveryConfirmation[] @relation("DeliveryConfirmedBy")
 
   @@index([role])
   @@index([department])
@@ -245,6 +257,7 @@ model MenuCycle {
 
   days             MenuDay[]
   orders           Order[]
+  deliveryConfirmations DeliveryConfirmation[]
 
   @@index([status])
   @@index([orderOpenAt, orderCutoffAt])
@@ -325,8 +338,60 @@ model DeliverySite {
   /// Users for whom this is the current default (admin-pinned or learned -
   /// see User.defaultDeliverySiteLocked).
   usersDefaultingHere User[] @relation("UserDefaultDeliverySite")
+  /// Reception accounts restricted to confirming deliveries at this site
+  /// only (see User.receptionSiteId).
+  receptionists User[] @relation("UserReceptionSite")
+  deliveryConfirmations DeliveryConfirmation[]
 
   @@index([active])
+}
+
+// ---------------------------------------------------------------------------
+// Delivery confirmation - reception's day-by-day proof that food for a
+// given delivery site actually arrived.
+//
+// One row per (cycle, delivery site, service date), created only once
+// reception acts on it - if no row exists, nothing has been confirmed yet.
+// A photo is the preferred evidence, but it is optional on purpose: a site
+// with no camera on hand, a bad connection, or a browser that refuses the
+// upload should never block reception from recording that the food arrived.
+// The record itself (who confirmed it, at what time) is what actually
+// counts as fulfilment - the photo is supporting evidence layered on top.
+// ---------------------------------------------------------------------------
+model DeliveryConfirmation {
+  id             String   @id @default(cuid())
+  cycleId        String
+  deliverySiteId String
+  /// The calendar day the food was due at this site.
+  serviceDate    DateTime @db.Date
+
+  /// Meals/orders expected at confirm time, snapshotted for the audit trail
+  /// so a later order cancellation can't quietly rewrite what reception saw.
+  expectedMeals  Int      @default(0)
+  expectedOrders Int      @default(0)
+
+  /// Null until reception confirms. Presence of this row + receivedAt is
+  /// what "fulfilled" means - everything else here is supporting detail.
+  receivedAt     DateTime?
+  receivedById   String?
+  /// Base64 data: URL of the proof-of-delivery photo. Optional - see above.
+  /// Kept as plain text so this works on either database connector with no
+  /// extra object-storage dependency; the app enforces a size ceiling
+  /// before it ever reaches here (see reception/actions.ts).
+  photoDataUrl   String?
+  note           String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  cycle          MenuCycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  deliverySite   DeliverySite @relation(fields: [deliverySiteId], references: [id], onDelete: Cascade)
+  receivedBy     User?        @relation("DeliveryConfirmedBy", fields: [receivedById], references: [id], onDelete: SetNull)
+
+  @@unique([cycleId, deliverySiteId, serviceDate])
+  @@index([cycleId])
+  @@index([deliverySiteId])
+  @@index([serviceDate])
 }
 
 // ---------------------------------------------------------------------------

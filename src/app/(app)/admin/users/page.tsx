@@ -19,6 +19,7 @@ const ROLE_STYLE: Record<string, string> = {
   ADMIN: 'bg-brand-100 text-brand-800',
   FINANCE: 'bg-emerald-100 text-emerald-800',
   ANALYTICS: 'bg-sky-100 text-sky-800',
+  RECEPTION: 'bg-amber-100 text-amber-800',
   USER: 'bg-slate-100 text-slate-700',
 };
 
@@ -54,7 +55,7 @@ export default async function UsersPage({
       orderBy: [{ active: 'desc' }, { role: 'asc' }, { name: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
-      include: { defaultDeliverySite: { select: { name: true } } },
+      include: { defaultDeliverySite: { select: { name: true } }, receptionSite: { select: { name: true } } },
     }),
   ]);
 
@@ -82,6 +83,7 @@ export default async function UsersPage({
                 <option value="ADMIN">{t('roleAdmin')}</option>
                 <option value="ANALYTICS">{t('roleAnalytics')}</option>
                 <option value="FINANCE">{t('roleFinance')}</option>
+                <option value="RECEPTION">{t('roleReception')}</option>
                 <option value="USER">{t('roleEmployee')}</option>
               </select>
               <input
@@ -141,6 +143,11 @@ export default async function UsersPage({
                       </td>
                       <td>
                         <span className={`badge ${ROLE_STYLE[u.role]}`}>{ROLE_LABEL[u.role]}</span>
+                        {u.role === 'RECEPTION' ? (
+                          <div className="mt-1 whitespace-nowrap text-xs text-slate-500">
+                            {u.receptionSite ? u.receptionSite.name : t('receptionSiteBadgeAll')}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="text-xs text-slate-500">{u.authProvider}</td>
                       <td className="text-xs text-slate-500">
@@ -159,6 +166,7 @@ export default async function UsersPage({
                               authProvider: u.authProvider,
                               defaultDeliverySiteId: u.defaultDeliverySiteId,
                               defaultDeliverySiteLocked: u.defaultDeliverySiteLocked,
+                              receptionSiteId: u.receptionSiteId,
                             }}
                             departments={departments}
                             deliverySites={deliverySites}

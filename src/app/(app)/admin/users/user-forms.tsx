@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { useState } from 'react';
 import type { Role, AuthProvider } from '@prisma/client';
 
 import { ActionForm } from '@/components/action-form';
@@ -18,6 +19,7 @@ type UserFields = {
   authProvider: AuthProvider;
   defaultDeliverySiteId: string | null;
   defaultDeliverySiteLocked: boolean;
+  receptionSiteId: string | null;
 };
 
 type DeliverySiteOption = { id: string; name: string };
@@ -29,6 +31,7 @@ function useRoleOptions() {
     { value: 'ADMIN', label: t('roleAdminOption') },
     { value: 'ANALYTICS', label: t('roleAnalyticsOption') },
     { value: 'FINANCE', label: t('roleFinanceOption') },
+    { value: 'RECEPTION', label: t('roleReceptionOption') },
   ] as const;
 }
 
@@ -41,6 +44,7 @@ function CreateUserFields({
 }) {
   const t = useTranslations('usersAdmin');
   const roleOptions = useRoleOptions();
+  const [role, setRole] = useState('USER');
   return (
     <>
       <div>
@@ -69,7 +73,7 @@ function CreateUserFields({
       </div>
       <div>
         <label className="label">{t('role_')}</label>
-        <select name="role" defaultValue="USER" className="input">
+        <select name="role" value={role} onChange={(e) => setRole(e.target.value)} className="input">
           {roleOptions.map((r) => (
             <option key={r.value} value={r.value}>
               {r.label}
@@ -89,6 +93,20 @@ function CreateUserFields({
         </select>
         <p className="mt-1 text-xs text-slate-500">{t('defaultDeliverySiteHint')}</p>
       </div>
+      {role === 'RECEPTION' ? (
+        <div>
+          <label className="label">{t('receptionSite')}</label>
+          <select name="receptionSiteId" defaultValue="" className="input">
+            <option value="">{t('receptionSiteAllOption')}</option>
+            {deliverySites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-slate-500">{t('receptionSiteHint')}</p>
+        </div>
+      ) : null}
       <div>
         <label className="label">{t('temporaryPassword')}</label>
         <input name="password" type="password" required className="input" autoComplete="new-password" />
@@ -141,6 +159,7 @@ export function EditUserDialog({
   const t = useTranslations('usersAdmin');
   const c = useTranslations('adminCommon');
   const roleOptions = useRoleOptions();
+  const [role, setRole] = useState(user.role);
   // Only an already-*locked* default is the admin's business here - an
   // auto-learned one (from the person's own last order) should show as
   // "no pin set", so saving this form for an unrelated reason (say, just
@@ -201,7 +220,12 @@ export function EditUserDialog({
           </div>
           <div>
             <label className="label">{t('role_')}</label>
-            <select name="role" defaultValue={user.role} className="input">
+            <select
+              name="role"
+              value={role}
+              onChange={(e) => setRole(e.target.value as Role)}
+              className="input"
+            >
               {roleOptions.map((r) => (
                 <option key={r.value} value={r.value}>
                   {r.label}
@@ -227,6 +251,20 @@ export function EditUserDialog({
                   : t('defaultDeliverySiteHint')}
             </p>
           </div>
+          {role === 'RECEPTION' ? (
+            <div>
+              <label className="label">{t('receptionSite')}</label>
+              <select name="receptionSiteId" defaultValue={user.receptionSiteId ?? ''} className="input">
+                <option value="">{t('receptionSiteAllOption')}</option>
+                {deliverySites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">{t('receptionSiteHint')}</p>
+            </div>
+          ) : null}
         </ActionForm>
       )}
     </Dialog>
