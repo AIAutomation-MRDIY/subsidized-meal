@@ -4,6 +4,7 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { prisma } from '@/lib/prisma';
@@ -13,17 +14,10 @@ import { DEFAULT_SETTINGS, SETTINGS_ID } from '@/lib/settings';
 import { CACHE_TAGS } from '@/lib/cache';
 import type { ActionState } from '@/components/action-form';
 
-// Uploaded files are written straight to disk under public/, which needs a
-// writable, persistent filesystem. That's true for a normal Node server
-// (e.g. `next start` on a VM/Docker), but NOT for most serverless hosts
-// (Vercel's function filesystem is read-only outside /tmp and doesn't
-// persist across deploys or instances). If this is deployed there, swap the
-// two `writeFile` calls below for an object-storage upload (Supabase
-// Storage, S3, Vercel Blob) and keep everything else the same.
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'branding');
 const UPLOAD_URL_PREFIX = '/uploads/branding';
 
-const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 const ALLOWED_TYPES: Record<string, string> = {
   'image/png': '.png',
   'image/jpeg': '.jpg',
@@ -36,6 +30,7 @@ const settingsSchema = z.object({
   siteName: z.string().trim().min(2, 'Site name must be at least 2 characters.').max(120),
   supportEmail: z.string().trim().email('Must be a valid email address.').optional().or(z.literal('')),
   maintenanceMessage: z.string().trim().max(500, 'Keep the banner under 500 characters.').optional(),
+  mealReceiptCutoffHour: z.coerce.number().int().min(0).max(23),
 });
 
 export async function updateSiteSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -48,6 +43,7 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
     siteName: parsed.data.siteName,
     supportEmail: parsed.data.supportEmail || null,
     maintenanceMessage: parsed.data.maintenanceMessage?.trim() || null,
+    mealReceiptCutoffHour: parsed.data.mealReceiptCutoffHour,
     updatedById: actor.id,
   };
 
@@ -57,14 +53,26 @@ export async function updateSiteSettings(_prev: ActionState, formData: FormData)
     update: data,
   });
 
-  await audit(actor.id, 'settings.update', 'AppSettings', SETTINGS_ID, { siteName: data.siteName });
+  await audit(actor.id, 'settings.update', 'AppSettings', SETTINGS_ID, {
+    siteName: data.siteName,
+    mealReceiptCutoffHour: data.mealReceiptCutoffHour,
+  });
 
-  // The site name is read in the root layout, header, and login screen -
-  // all need to reflect a change immediately, not just the settings page.
   revalidatePath('/', 'layout');
+  revalidatePath('/admin/settings');
   revalidateTag(CACHE_TAGS.siteSettings);
 
-  return { success: 'Settings saved.' };
+  redirect('/admin/settings?saved=1');
+}
+
+/**
+ * Plain form-action wrapper for updateSiteSettings — no ActionState prev
+ * parameter, so it can be passed directly to a native <form action>.
+ * Used by the Ordering section which needs a real POST + redirect so the
+ * select re-mounts and shows the saved value without a manual refresh.
+ */
+export async function updateSiteSettingsPlain(formData: FormData): Promise<void> {
+  await updateSiteSettings({}, formData);
 }
 
 const brandingKindSchema = z.enum(['logo', 'favicon']);
@@ -120,8 +128,6 @@ export async function uploadBrandingImage(_prev: ActionState, formData: FormData
     update: { [field]: publicUrl, updatedById: actor.id },
   });
 
-  // Best-effort cleanup of the previous upload - never block on this, and
-  // skip it entirely for the shipped default (there's no file to delete).
   if (previousUrl && previousUrl.startsWith(`${UPLOAD_URL_PREFIX}/`)) {
     void unlink(path.join(process.cwd(), 'public', previousUrl)).catch(() => {});
   }
@@ -133,7 +139,6 @@ export async function uploadBrandingImage(_prev: ActionState, formData: FormData
   return { success: kind === 'logo' ? 'Logo updated.' : 'Favicon updated.' };
 }
 
-/** Clears an uploaded override so the shipped default image is used again. */
 export async function resetBrandingImage(formData: FormData): Promise<void> {
   const actor = await assertCapability('settings:manage');
 

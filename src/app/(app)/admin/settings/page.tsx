@@ -1,11 +1,11 @@
 import { getTranslations } from 'next-intl/server';
 
 import { requireCapability } from '@/lib/session';
-import { getSiteSettings, DEFAULT_SETTINGS } from '@/lib/settings';
+import { getSiteSettings, DEFAULT_SETTINGS, formatCutoffHour } from '@/lib/settings';
 import { PageHeader, Section } from '@/components/ui';
 import { ActionForm, InlineSubmit } from '@/components/action-form';
 
-import { updateSiteSettings, uploadBrandingImage, resetBrandingImage } from './actions';
+import { updateSiteSettings, updateSiteSettingsPlain, uploadBrandingImage, resetBrandingImage } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,14 +66,30 @@ function BrandingImageField({
   );
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ saved?: string }>;
+}) {
   await requireCapability('settings:manage');
   const t = await getTranslations('settingsAdmin');
   const settings = await getSiteSettings();
+  const params = await searchParams;
+  const justSaved = params.saved === '1';
+
+  const cutoffHour = settings.mealReceiptCutoffHour;
+  // All 24 hours available — no restriction, admin knows what they're doing.
+  const ALL_HOURS = Array.from({ length: 24 }, (_, i) => i);
 
   return (
     <>
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+
+      {justSaved ? (
+        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Settings saved successfully.
+        </div>
+      ) : null}
 
       <Section title={t('branding')} description={t('brandingHint')}>
         <div className="grid gap-6 p-5 sm:grid-cols-2">
@@ -144,6 +160,56 @@ export default async function SettingsPage() {
           </div>
         </ActionForm>
       </Section>
+
+      {/* ── Ordering settings ───────────────────────────────────────────── */}
+      <div className="mt-6">
+        <Section
+          title="Ordering"
+          description="Controls that affect how employee meal orders are processed."
+        >
+          {/*
+            Plain form action (not ActionForm) so the page fully reloads after
+            save. ActionForm keeps state client-side — React ignores defaultValue
+            on re-render, so the select appears stuck until a manual refresh.
+            A real POST + server redirect re-mounts the page from scratch and
+            the select always reflects the saved value immediately.
+          */}
+          <form action={updateSiteSettingsPlain} className="p-5">
+            <input type="hidden" name="siteName" value={settings.siteName} />
+            <input type="hidden" name="supportEmail" value={settings.supportEmail ?? ''} />
+            <input type="hidden" name="maintenanceMessage" value={settings.maintenanceMessage ?? ''} />
+
+            <div className="max-w-xs">
+              <label className="label" htmlFor="mealReceiptCutoffHour">
+                Auto-confirm time
+              </label>
+              <select
+                id="mealReceiptCutoffHour"
+                name="mealReceiptCutoffHour"
+                defaultValue={String(cutoffHour)}
+                className="input"
+              >
+                {ALL_HOURS.map((h) => (
+                  <option key={h} value={String(h)}>
+                    {formatCutoffHour(h)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-slate-500">
+                Employees who haven&rsquo;t confirmed their meal by this time will be
+                automatically marked as received. Currently{' '}
+                <strong>{formatCutoffHour(cutoffHour)}</strong>. Takes effect immediately.
+              </p>
+            </div>
+
+            <div className="mt-4">
+              <button type="submit" className="btn-primary">
+                {t('save')}
+              </button>
+            </div>
+          </form>
+        </Section>
+      </div>
     </>
   );
 }

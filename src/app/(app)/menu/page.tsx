@@ -12,7 +12,6 @@ import { PageHeader, EmptyState, Alert } from '@/components/ui';
 import type { DayTab } from '@/components/day-tabs';
 
 import { MenuOrdering, type CartLine, type MenuDish } from './menu-ordering';
-import { TodayReceiptPanel } from './today-receipt-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -202,10 +201,6 @@ export default async function MenuPage({
   return (
     <>
       {header}
-
-      {/* Receipt confirmation panel — only shows on service days when the
-          employee has a paid meal. Returns null silently on all other days. */}
-      <TodayReceiptPanel userId={user.id} locale={locale} />
 
       {awaitingPayment ? (
         <div className="mb-4">
