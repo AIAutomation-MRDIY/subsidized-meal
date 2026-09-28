@@ -14,6 +14,7 @@ import {
   type SubsidyRuleLike,
 } from './subsidy';
 import { getActiveSubsidyRules } from './cache';
+import { getSiteSettings } from './settings';
 
 /** Statuses that hold a portion against a menu item's capacity. */
 const COMMITTED_STATUSES = ['AWAITING_PAYMENT', 'PAID'] as const;
@@ -125,13 +126,13 @@ export type CartMutationResult = { ok: true } | { ok: false; error: string };
 
 /**
  * How many meals one person may order for a single service day.
- *
- * The rule is enforced here rather than in the UI, so it holds for every
- * caller. Raising this alone will not enable multi-meal ordering - the
- * ordering screen is a single-choice control by design - but it keeps the
- * constraint in one named place.
+ * Reads from AppSettings so it can be changed by admin without a redeploy.
+ * Falls back to 1 (the safe default) if settings cannot be read.
  */
-export const MEALS_PER_DAY = 1;
+export async function getMealsPerDay(): Promise<number> {
+  const settings = await getSiteSettings();
+  return Math.max(1, settings.maxMealsPerDay ?? 1);
+}
 
 /**
  * Choose the meal for one service day.
@@ -168,45 +169,79 @@ export async function selectMeal(userId: string, menuItemId: string): Promise<Ca
 
   const order = await getOrCreateCart(userId, cycle.id);
 
+  const mealsPerDay = await getMealsPerDay();
+
   if (menuItem.capacity != null) {
     const others = await committedQuantity(menuItemId, order.id);
-    if (others + MEALS_PER_DAY > menuItem.capacity) {
+    if (others + 1 > menuItem.capacity) {
       return { ok: false, error: 'That dish is sold out for the day.' };
     }
   }
 
-  const gross = menuItem.priceSen * MEALS_PER_DAY;
+  // How many distinct dishes the employee already has in cart for this
+  // service date, excluding the one being added (re-selecting the same dish
+  // is an idempotent update, not a new addition).
+  const existingForDay = await prisma.orderItem.findMany({
+    where: {
+      orderId: order.id,
+      serviceDate: menuItem.menuDay.serviceDate,
+      NOT: { menuItemId },
+    },
+    select: { id: true },
+  });
 
-  await prisma.$transaction([
-    // One meal per day: anything else already chosen for this date makes way.
-    prisma.orderItem.deleteMany({
-      where: {
-        orderId: order.id,
-        serviceDate: menuItem.menuDay.serviceDate,
-        NOT: { menuItemId },
-      },
-    }),
-    prisma.orderItem.upsert({
-      where: { orderId_menuItemId: { orderId: order.id, menuItemId } },
-      create: {
-        orderId: order.id,
-        menuItemId,
-        quantity: MEALS_PER_DAY,
-        unitPriceSen: menuItem.priceSen,
-        grossSen: gross,
-        subsidySen: 0,
-        netSen: gross,
-        serviceDate: menuItem.menuDay.serviceDate,
-        dishName: menuItem.dish.name,
-        restaurantName: menuItem.dish.restaurant.name,
-      },
-      update: {
-        quantity: MEALS_PER_DAY,
-        unitPriceSen: menuItem.priceSen,
-        grossSen: gross,
-      },
-    }),
-  ]);
+  const alreadyHas = existingForDay.length;
+
+  if (alreadyHas >= mealsPerDay) {
+    // At or over the current limit.
+    if (mealsPerDay === 1) {
+      // Limit is 1: replace silently (original single-meal behaviour).
+      await prisma.orderItem.deleteMany({
+        where: {
+          orderId: order.id,
+          serviceDate: menuItem.menuDay.serviceDate,
+          NOT: { menuItemId },
+        },
+      });
+    } else {
+      // Limit > 1: tell the employee to remove one first. We intentionally
+      // do NOT auto-remove here — the employee should choose which to drop.
+      return {
+        ok: false,
+        error: `You already have ${alreadyHas} meal${alreadyHas === 1 ? '' : 's'} selected for this day (maximum is ${mealsPerDay}). Remove one before adding another.`,
+      };
+    }
+  } else if (alreadyHas > mealsPerDay) {
+    // Cart was built under a higher limit that has since been lowered.
+    // Block adding more — employee must remove excess items first.
+    return {
+      ok: false,
+      error: `The daily meal limit was recently reduced to ${mealsPerDay}. You currently have ${alreadyHas} meals selected for this day — please remove ${alreadyHas - mealsPerDay} before adding more.`,
+    };
+  }
+
+  const gross = menuItem.priceSen;
+
+  await prisma.orderItem.upsert({
+    where: { orderId_menuItemId: { orderId: order.id, menuItemId } },
+    create: {
+      orderId: order.id,
+      menuItemId,
+      quantity: 1,
+      unitPriceSen: menuItem.priceSen,
+      grossSen: gross,
+      subsidySen: 0,
+      netSen: gross,
+      serviceDate: menuItem.menuDay.serviceDate,
+      dishName: menuItem.dish.name,
+      restaurantName: menuItem.dish.restaurant.name,
+    },
+    update: {
+      quantity: 1,
+      unitPriceSen: menuItem.priceSen,
+      grossSen: gross,
+    },
+  });
 
   await repriceOrder(order.id);
   return { ok: true };
@@ -387,11 +422,25 @@ export async function validateForCheckout(orderId: string): Promise<CheckoutVali
     const key = toDateKey(item.serviceDate);
     perDay.set(key, (perDay.get(key) ?? 0) + item.quantity);
   }
+  const mealsPerDay = await getMealsPerDay();
   for (const [key, count] of perDay) {
-    if (count > MEALS_PER_DAY) {
+    if (count > mealsPerDay) {
       return {
         ok: false,
-        error: `Only ${MEALS_PER_DAY} meal per day is allowed, but ${count} are selected for ${key}. Remove the extras and try again.`,
+        error: `Only ${mealsPerDay} meal${mealsPerDay === 1 ? '' : 's'} per day is allowed, but ${count} are selected for ${key}. Remove the extras and try again.`,
+      };
+    }
+  }
+
+  // Hard block: if the cart violates the current limit (e.g. admin lowered
+  // it after the cart was built), checkout is refused until the employee
+  // trims their cart. We do not auto-remove here — the employee picks which
+  // dish to drop.
+  for (const [key, count] of perDay) {
+    if (count > mealsPerDay) {
+      return {
+        ok: false,
+        error: `The daily meal limit is now ${mealsPerDay}. You have ${count} meals selected for ${key} — remove ${count - mealsPerDay} before checking out.`,
       };
     }
   }
@@ -423,4 +472,48 @@ export async function audit(
   await prisma.auditLog.create({
     data: { actorId, action, entityType, entityId: entityId ?? null, metadata },
   });
+}
+
+/**
+ * Trim a CART order's items so no service date exceeds the current
+ * mealsPerDay limit. Called when the menu page loads so a cart built
+ * under a higher limit is silently brought into compliance — keeping the
+ * most recently added items and dropping the oldest ones (lowest id sort).
+ *
+ * This is intentionally silent: the employee sees the updated cart on the
+ * next page render without an error, which is less jarring than blocking
+ * them at checkout.
+ */
+export async function enforceCartMealsPerDay(userId: string, cycleId: string): Promise<void> {
+  const mealsPerDay = await getMealsPerDay();
+
+  const order = await prisma.order.findFirst({
+    where: { userId, cycleId, status: 'CART' },
+    include: { items: { orderBy: { id: 'asc' } } },
+  });
+  if (!order) return;
+
+  // Group items by service date
+  const byDate = new Map<string, typeof order.items>();
+  for (const item of order.items) {
+    const key = toDateKey(item.serviceDate);
+    const bucket = byDate.get(key);
+    if (bucket) bucket.push(item);
+    else byDate.set(key, [item]);
+  }
+
+  const toDelete: string[] = [];
+  for (const [, items] of byDate) {
+    if (items.length > mealsPerDay) {
+      // Keep the last `mealsPerDay` items (most recently added by id sort),
+      // drop the oldest ones.
+      const excess = items.slice(0, items.length - mealsPerDay);
+      toDelete.push(...excess.map((i) => i.id));
+    }
+  }
+
+  if (toDelete.length === 0) return;
+
+  await prisma.orderItem.deleteMany({ where: { id: { in: toDelete } } });
+  await repriceOrder(order.id);
 }
