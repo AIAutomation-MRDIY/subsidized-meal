@@ -19,7 +19,7 @@ const RECON_PAGE_SIZE = 25;
 export default async function FinancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ weeks?: string; tab?: string; page?: string }>;
+  searchParams: Promise<{ weeks?: string; tab?: string; page?: string; cycle?: string }>;
 }) {
   const user = await requireCapability('finance:view');
   const params = await searchParams;
@@ -324,13 +324,36 @@ export default async function FinancePage({
   // ════════════════════════════════════════════════════════════════════════
 
   const page = parsePage(params.page);
+  const selectedCycleId = params.cycle ?? null;
 
-  const reconWhere = {
-    status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
-    cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
-  };
+  // Table filter: if a specific cycle is selected use it, otherwise fall
+  // back to the trailing-weeks window. Both the table and the aggregate
+  // stats use the same filter so the reconciliation indicator always
+  // matches what the table shows.
+  const reconWhere = selectedCycleId
+    ? {
+        status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
+        cycleId: selectedCycleId,
+      }
+    : {
+        status: { in: ['PAID', 'AWAITING_PAYMENT', 'CANCELLED', 'REFUNDED'] as ('PAID' | 'AWAITING_PAYMENT' | 'CANCELLED' | 'REFUNDED')[] },
+        cycle: { serviceWeekStart: { gte: window.from, lt: window.to } },
+      };
 
-  const [reconTotal, reconOrders, unmatchedLogs] = await Promise.all([
+  // Same filter shape for the aggregate queries (no status filter needed there)
+  const reconAggWhere = selectedCycleId
+    ? { cycleId: selectedCycleId }
+    : { cycle: { serviceWeekStart: { gte: window.from, lt: window.to } } };
+
+  // Cycles for the per-cycle export picker
+  const exportCycles = await prisma.menuCycle.findMany({
+    where: { status: { in: ['PUBLISHED', 'CLOSED', 'FULFILLED'] as const } },
+    orderBy: { serviceWeekStart: 'desc' },
+    take: 26,
+    select: { id: true, serviceWeekStart: true },
+  });
+
+  const [reconTotal, reconOrders, unmatchedLogs, reconAgg, paymentAgg] = await Promise.all([
     prisma.order.count({ where: reconWhere }),
     prisma.order.findMany({
       where: reconWhere,
@@ -385,12 +408,105 @@ export default async function FinancePage({
       take: 50,
       select: { id: true, createdAt: true, metadata: true },
     }),
+    // Aggregate: sum of netSen for PAID orders matching current filter
+    prisma.order.aggregate({
+      where: { status: 'PAID', ...reconAggWhere },
+      _sum: { netSen: true },
+      _count: { _all: true },
+    }),
+    // Aggregate: sum of SUCCEEDED payments matching current filter
+    prisma.payment.aggregate({
+      where: {
+        status: 'SUCCEEDED',
+        order: reconAggWhere,
+      },
+      _sum: { amountSen: true },
+      _count: { _all: true },
+    }),
   ]);
+
+  // Reconciliation indicator
+  const totalOrdersSen = reconAgg._sum.netSen ?? 0;
+  const totalPaidSen = paymentAgg._sum.amountSen ?? 0;
+  const diffSen = totalPaidSen - totalOrdersSen;
+  const isReconciled = diffSen === 0;
+  const hasOrphanPayments = paymentAgg._count._all > reconAgg._count._all;
 
   return (
     <>
       {header}
       {tabBar}
+
+      {/* ── Live reconciliation indicator ───────────────────────────────── */}
+      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Reconciliation Status</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Comparing total PAID order amounts vs total SUCCEEDED HitPay payments
+              for the last {weeks} weeks.
+            </p>
+          </div>
+          {isReconciled ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-sm font-medium text-emerald-800">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+              </svg>
+              Reconciled
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-sm font-medium text-red-800">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+              </svg>
+              Discrepancy Detected
+            </span>
+          )}
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-4">
+          <div className="rounded-lg bg-slate-50 px-4 py-3">
+            <p className="text-xs text-slate-500">PAID Orders Total</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{formatSen(totalOrdersSen)}</p>
+            <p className="text-xs text-slate-400">{reconAgg._count._all} orders</p>
+          </div>
+          <div className="rounded-lg bg-slate-50 px-4 py-3">
+            <p className="text-xs text-slate-500">HitPay Collected</p>
+            <p className="mt-1 text-lg font-semibold text-slate-900">{formatSen(totalPaidSen)}</p>
+            <p className="text-xs text-slate-400">{paymentAgg._count._all} payments</p>
+          </div>
+          <div className={`rounded-lg px-4 py-3 ${isReconciled ? 'bg-emerald-50' : 'bg-red-50'}`}>
+            <p className="text-xs text-slate-500">Difference</p>
+            <p className={`mt-1 text-lg font-semibold ${isReconciled ? 'text-emerald-700' : 'text-red-700'}`}>
+              {diffSen === 0 ? 'RM 0.00' : `${diffSen > 0 ? '+' : ''}${formatSen(diffSen)}`}
+            </p>
+            <p className="text-xs text-slate-400">
+              {isReconciled ? 'Fully matched' : diffSen > 0 ? 'HitPay collected more' : 'HitPay collected less'}
+            </p>
+          </div>
+          <div className={`rounded-lg px-4 py-3 ${unmatchedLogs.length > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
+            <p className="text-xs text-slate-500">Unmatched Webhooks</p>
+            <p className={`mt-1 text-lg font-semibold ${unmatchedLogs.length > 0 ? 'text-amber-700' : 'text-slate-900'}`}>
+              {unmatchedLogs.length}
+            </p>
+            <p className="text-xs text-slate-400">
+              {unmatchedLogs.length === 0 ? 'None — all matched' : 'Need investigation'}
+            </p>
+          </div>
+        </div>
+
+        {!isReconciled && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-800">
+            <strong>Action required:</strong> The {diffSen > 0 ? 'excess' : 'shortfall'} of{' '}
+            <strong>{formatSen(Math.abs(diffSen))}</strong> needs investigation.
+            {diffSen > 0
+              ? ' HitPay received more than the order total — check for duplicate payments or unmatched webhooks below.'
+              : ' HitPay received less than the order total — check for failed payments or orders marked PAID without a matching HitPay SUCCEEDED record.'}
+            {' '}Export the CSV below and cross-reference with your HitPay dashboard.
+          </div>
+        )}
+      </div>
+      {/* ─────────────────────────────────────────────────────────────────── */}
 
       {unmatchedLogs.length > 0 ? (
         <div className="mb-6">
@@ -431,13 +547,40 @@ export default async function FinancePage({
 
       <Section
         title="Order & Payment Matching"
-        description={`${reconTotal} orders in the last ${weeks} weeks — showing order reference, employee, meals ordered, and matched HitPay payment.`}
+        description={`${reconTotal} order${reconTotal === 1 ? '' : 's'} — ${selectedCycleId ? `week of ${formatWeekRange(exportCycles.find((c) => c.id === selectedCycleId)?.serviceWeekStart ?? new Date(), locale)}` : `last ${weeks} weeks`}`}
         action={
-          exportable ? (
-            <a href={`/api/exports/reconciliation?weeks=${weeks}`} className="btn-secondary btn-sm">
-              Export CSV
-            </a>
-          ) : null
+          <div className="flex items-center gap-2">
+            {/* Single filter form — table + export both follow this selection */}
+            <form method="get" className="flex items-center gap-2">
+              <input type="hidden" name="tab" value="reconciliation" />
+              <input type="hidden" name="weeks" value={String(weeks)} />
+              <select
+                name="cycle"
+                defaultValue={selectedCycleId ?? ''}
+                className="input !w-48 !py-1 text-xs"
+              >
+                <option value="">Last {weeks} weeks</option>
+                {exportCycles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {formatWeekRange(c.serviceWeekStart, locale)}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="btn-secondary btn-sm">Filter</button>
+            </form>
+            {exportable ? (
+              <a
+                href={
+                  selectedCycleId
+                    ? `/api/exports/reconciliation?cycle=${selectedCycleId}`
+                    : `/api/exports/reconciliation?weeks=${weeks}`
+                }
+                className="btn-secondary btn-sm"
+              >
+                Export CSV
+              </a>
+            ) : null}
+          </div>
         }
       >
         {reconOrders.length === 0 ? (
@@ -553,7 +696,11 @@ export default async function FinancePage({
               page={page}
               pageSize={RECON_PAGE_SIZE}
               total={reconTotal}
-              searchParams={{ tab: 'reconciliation', weeks: String(weeks) }}
+              searchParams={{
+                tab: 'reconciliation',
+                weeks: String(weeks),
+                ...(selectedCycleId ? { cycle: selectedCycleId } : {}),
+              }}
             />
           </>
         )}
