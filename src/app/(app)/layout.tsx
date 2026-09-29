@@ -53,6 +53,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Receipt confirmation tab — visible to anyone who can view analytics
   if (can(user.role, 'analytics:view'))
     insights.items.push({ href: '/receipt', label: 'Receipt Confirmation' });
+  if (can(user.role, 'audit:view'))
+    insights.items.push({ href: '/admin/audit', label: 'Audit Log' });
   if (insights.items.length) groups.push(insights);
 
   if (can(user.role, 'delivery:confirm')) {
