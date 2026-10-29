@@ -9,6 +9,7 @@ import { formatSen } from '@/lib/money';
 import { formatDate, formatDateTime, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, Alert, StatusBadge } from '@/components/ui';
 import { PaymentStatus } from './payment-status';
+import { WebPaymentStatus } from './web-payment-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,11 +93,21 @@ export default async function OrderDetailPage({
               user.embed ? (
                 <PaymentStatus reference={order.reference} checkoutUrl={latestPayment.checkoutUrl} />
               ) : (
-                <p className="mt-2">
-                  <a href={latestPayment.checkoutUrl} className="btn-primary btn-sm">
-                    {t('continueToPayment')}
-                  </a>
-                </p>
+                // Web mode: show PaymentStatus with autoStart when returning from HitPay
+                // so the page polls and auto-updates without the user needing to refresh.
+                // When not coming from HitPay, show a normal link.
+                query.from === 'hitpay' ? (
+                  <WebPaymentStatus
+                    reference={order.reference}
+                    checkoutUrl={latestPayment.checkoutUrl}
+                  />
+                ) : (
+                  <p className="mt-2">
+                    <a href={latestPayment.checkoutUrl} className="btn-primary btn-sm">
+                      {t('continueToPayment')}
+                    </a>
+                  </p>
+                )
               )
             ) : null}
           </Alert>
