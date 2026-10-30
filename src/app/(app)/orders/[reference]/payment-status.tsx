@@ -37,7 +37,15 @@ export function PaymentStatus({ reference, checkoutUrl }: { reference: string; c
         if (!res.ok) return;
         const data = (await res.json()) as { status?: string };
         if (data.status && data.status !== 'AWAITING_PAYMENT') {
-          popupRef.current?.close();
+          // Close via stored ref or by finding the named popup window
+          if (popupRef.current && !popupRef.current.closed) {
+            popupRef.current.close();
+          } else {
+            try {
+              const p = window.open('', 'hitpay_checkout');
+              if (p && !p.closed) p.close();
+            } catch { /* cross-origin — ignore */ }
+          }
           if (pollingRef.current) clearInterval(pollingRef.current);
           pollingRef.current = null;
           setPolling(false);
@@ -64,11 +72,14 @@ export function PaymentStatus({ reference, checkoutUrl }: { reference: string; c
     startPolling();
   }
 
-  // Clean up polling on unmount
+  // Start polling automatically on mount — popup is already open
+  // (opened in menu-ordering.tsx before navigating here)
   useEffect(() => {
+    startPolling();
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
