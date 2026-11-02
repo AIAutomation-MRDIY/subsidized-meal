@@ -3,72 +3,104 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { retryPayment } from './retry-payment-action';
 
 const POLL_MS = 3000;
-const TIMEOUT_MS = 60_000;
 
+/**
+ * Web (non-embed) payment status.
+ * Shows "Continue to Payment" button immediately.
+ * Polls silently in background — auto-refreshes when PAID.
+ * Retry always creates a fresh payment request.
+ */
 export function WebPaymentStatus({
   reference,
-  checkoutUrl,
 }: {
   reference: string;
   checkoutUrl: string;
+  autoStart?: boolean;
 }) {
   const t = useTranslations('orderDetail');
   const router = useRouter();
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [timedOut, setTimedOut] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Always poll silently in background
   useEffect(() => {
     pollingRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/orders/${encodeURIComponent(reference)}/status`, {
-          cache: 'no-store',
-        });
+        const res = await fetch(
+          `/api/orders/${encodeURIComponent(reference)}/status`,
+          { cache: 'no-store' }
+        );
         if (!res.ok) return;
         const data = (await res.json()) as { status?: string };
         if (data.status && data.status !== 'AWAITING_PAYMENT') {
           if (pollingRef.current) clearInterval(pollingRef.current);
-          if (timeoutRef.current) clearTimeout(timeoutRef.current);
           router.refresh();
         }
-      } catch {
-        // Transient network hiccup — next tick will retry.
-      }
+      } catch { /* network hiccup */ }
     }, POLL_MS);
-
-    timeoutRef.current = setTimeout(() => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      setTimedOut(true);
-    }, TIMEOUT_MS);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (timedOut) {
-    return (
-      <div className="mt-2 flex flex-col gap-2">
-        <p className="text-xs text-amber-700">
-          Payment confirmation is taking longer than expected. If you have completed payment, please wait a moment and refresh. Otherwise you can retry below.
-        </p>
-        <p className="mt-2">
-          <a href={checkoutUrl} className="btn-primary btn-sm">
-            {t('continueToPayment')}
-          </a>
-        </p>
-      </div>
-    );
+  async function handleRetry() {
+    setError(null);
+    setRetrying(true);
+
+    const result = await retryPayment(reference);
+    setRetrying(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    // ADAPTIS — form submit in page
+    if (result.adaptisFormData && result.adaptisPaymentUrl) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = result.adaptisPaymentUrl;
+      for (const [key, val] of Object.entries(result.adaptisFormData)) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = key;
+        input.value = String(val);
+        form.appendChild(input);
+      }
+      document.body.appendChild(form);
+      form.submit();
+      return;
+    }
+
+    // HitPay / Betterpay — redirect to fresh URL
+    if (result.checkoutUrl) {
+      window.location.href = result.checkoutUrl;
+    }
   }
 
   return (
-    <div className="mt-2 flex items-center gap-2">
-      <span className="h-2.5 w-2.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
-      <span className="text-xs text-slate-500">{t('checkingPayment')}</span>
+    <div className="mt-2 flex flex-col gap-2">
+      <p>
+        <button
+          type="button"
+          onClick={handleRetry}
+          disabled={retrying}
+          className="btn-primary btn-sm"
+        >
+          {retrying ? 'Preparing…' : t('continueToPayment')}
+        </button>
+      </p>
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
