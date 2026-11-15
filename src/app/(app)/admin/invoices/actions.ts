@@ -7,6 +7,9 @@ import { put, del } from '@vercel/blob';
 import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { audit } from '@/lib/orders';
+import { sendEmail } from '@/lib/email';
+import { invoiceUploadedAdminEmail } from '@/lib/email-templates';
+import { formatWeekRange } from '@/lib/cycle';
 import type { ActionState } from '@/components/action-form';
 
 function isBlobUrl(url: string | null | undefined): url is string {
@@ -128,6 +131,28 @@ export async function uploadInvoice(
     amountSen:      d.amountSen,
     hasFile:        !!fileUrl,
   });
+
+  // Alert admins (non-blocking)
+  prisma.user.findMany({
+    where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
+    select: { email: true },
+  }).then((admins) => {
+    const { subject, html } = invoiceUploadedAdminEmail({
+      restaurantName: restaurant.name,
+      cycleWeek: formatWeekRange(cycle.serviceWeekStart),
+      invoiceNumber: d.invoiceNumber || undefined,
+      amountSen: d.amountSen,
+      uploadedBy: actor.name ?? 'Admin',
+      appUrl: process.env.APP_URL ?? '',
+    });
+    return Promise.all(
+      admins.filter((a) => a.email).map((a) =>
+        sendEmail({ to: a.email!, subject, html }).catch((err) =>
+          console.error('[invoice] admin alert email failed', err),
+        ),
+      ),
+    );
+  }).catch((err) => console.error('[invoice] admin alert query failed', err));
 
   revalidatePath('/admin/invoices');
   revalidatePath('/finance');

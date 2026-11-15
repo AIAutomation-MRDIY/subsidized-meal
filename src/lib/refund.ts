@@ -4,6 +4,9 @@ import { prisma } from './prisma';
 import { refundPayment } from './hitpay';
 import { getEntityCredentials } from './entity-config';
 import { audit } from './orders';
+import { sendEmail } from './email';
+import { refundSuccessEmail, refundQueuedEmail, refundFailedEmployeeEmail, refundFailedAdminEmail } from './email-templates';
+import { formatWeekRange } from './cycle';
 import type { SiteSettings } from './settings';
 
 // ---------------------------------------------------------------------------
@@ -26,7 +29,12 @@ export async function queueRefundRequest(
 ): Promise<QueueRefundResult> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    select: { status: true, reference: true },
+    select: {
+      status: true,
+      reference: true,
+      user: { select: { name: true, email: true } },
+      cycle: { select: { serviceWeekStart: true } },
+    },
   });
 
   if (!order) return { ok: false, error: 'Order not found.' };
@@ -47,6 +55,18 @@ export async function queueRefundRequest(
     reference: order.reference,
     reason,
   });
+
+  if (order.user.email) {
+    const { subject, html } = refundQueuedEmail({
+      name: order.user.name,
+      reference: order.reference,
+      serviceWeek: formatWeekRange(order.cycle.serviceWeekStart),
+      appUrl: process.env.APP_URL ?? '',
+    });
+    sendEmail({ to: order.user.email, subject, html }).catch((err) =>
+      console.error('[refund] queue email failed for', order.reference, err),
+    );
+  }
 
   return { ok: true };
 }
@@ -79,6 +99,8 @@ export async function processRefund(
         orderBy: { createdAt: 'desc' },
         take: 1,
       },
+      user: { select: { name: true, email: true } },
+      cycle: { select: { serviceWeekStart: true } },
     },
   });
 
@@ -129,6 +151,7 @@ export async function processRefund(
         where: { id: order.id },
         data: {
           status: 'REFUNDED',
+          refundSeenAt: null, // reset so the in-app banner shows
           cancelledAt: order.cancelledAt ?? new Date(),
           cancelReason: order.cancelReason ?? reason ?? 'Refunded',
         },
@@ -140,6 +163,20 @@ export async function processRefund(
       amountSen: payment.amountSen,
       refundId: refund.id,
     });
+
+    // Send refund email (non-blocking — failure must not break the refund flow)
+    if (order.user.email) {
+      const { subject, html } = refundSuccessEmail({
+        name: order.user.name,
+        reference: order.reference,
+        amountSen: payment.amountSen,
+        serviceWeek: formatWeekRange(order.cycle.serviceWeekStart),
+        appUrl: process.env.APP_URL ?? '',
+      });
+      sendEmail({ to: order.user.email, subject, html }).catch((err) =>
+        console.error('[refund] email failed for', order.reference, err),
+      );
+    }
 
     return { ok: true, refundId: refund.id };
   } catch (err) {
@@ -156,6 +193,40 @@ export async function processRefund(
         attempts: newAttempts,
         lastError: errMsg,
       });
+
+      // Notify employee (non-blocking)
+      if (order.user.email) {
+        const { subject, html } = refundFailedEmployeeEmail({
+          name: order.user.name,
+          reference: order.reference,
+          amountSen: payment.amountSen,
+          appUrl: process.env.APP_URL ?? '',
+        });
+        sendEmail({ to: order.user.email, subject, html }).catch((err) =>
+          console.error('[refund] employee failed email failed for', order.reference, err),
+        );
+      }
+
+      // Alert all admins (non-blocking)
+      prisma.user.findMany({
+        where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
+        select: { email: true },
+      }).then((admins) => {
+        const { subject, html } = refundFailedAdminEmail({
+          reference: order.reference,
+          employeeName: order.user.name,
+          attempts: newAttempts,
+          amountSen: payment.amountSen,
+          appUrl: process.env.APP_URL ?? '',
+        });
+        return Promise.all(
+          admins.filter((a) => a.email).map((a) =>
+            sendEmail({ to: a.email!, subject, html }).catch((err) =>
+              console.error('[refund] admin alert email failed', err),
+            ),
+          ),
+        );
+      }).catch((err) => console.error('[refund] admin alert query failed', err));
     }
 
     return { ok: false, error: errMsg };

@@ -26,6 +26,7 @@
     "jose": "^5.9.6",
     "next": "^15.1.6",
     "next-intl": "^4.13.5",
+    "nodemailer": "^10.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.0",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.7",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.3",
     "autoprefixer": "^10.4.20",
