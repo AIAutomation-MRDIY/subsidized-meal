@@ -14,6 +14,8 @@ import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { todayInAppTz, toDateKey, zonedToUtc, APP_TIMEZONE } from '@/lib/cycle';
 import { audit } from '@/lib/orders';
+import { sendEmail } from '@/lib/email';
+import { mealNotReceivedAdminEmail } from '@/lib/email-templates';
 
 export type ReceiptResult = { ok: boolean; error?: string };
 
@@ -140,6 +142,37 @@ export async function markMealNotReceived(orderItemId: string): Promise<ReceiptR
   await audit(user.id, 'meal.not_received', 'OrderItem', orderItemId, {
     serviceDate: toDateKey(item.serviceDate),
   });
+
+  // Alert admins (non-blocking)
+  prisma.orderItem.findUnique({
+    where: { id: orderItemId },
+    select: {
+      serviceDate: true,
+      dish: { select: { name: true } },
+      order: { select: { reference: true } },
+    },
+  }).then((detail) => {
+    if (!detail) return;
+    return prisma.user.findMany({
+      where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
+      select: { email: true },
+    }).then((admins) => {
+      const { subject, html } = mealNotReceivedAdminEmail({
+        employeeName: user.name,
+        dishName: detail.dish.name,
+        serviceDate: toDateKey(detail.serviceDate),
+        orderReference: detail.order.reference,
+        appUrl: process.env.APP_URL ?? '',
+      });
+      return Promise.all(
+        admins.filter((a) => a.email).map((a) =>
+          sendEmail({ to: a.email!, subject, html }).catch((err) =>
+            console.error('[meal] not received email failed', err),
+          ),
+        ),
+      );
+    });
+  }).catch((err) => console.error('[meal] not received admin query failed', err));
 
   revalidatePath('/my-meals');
   revalidatePath('/menu');
