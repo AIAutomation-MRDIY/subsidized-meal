@@ -16,6 +16,7 @@ type RestaurantFields = {
   contactName: string | null;
   contactPhone: string | null;
   address: string | null;
+  isHalal: boolean;
 };
 
 function Fields({ restaurant }: { restaurant?: RestaurantFields }) {
@@ -92,6 +93,18 @@ function Fields({ restaurant }: { restaurant?: RestaurantFields }) {
           className="input"
         />
       </div>
+      <label className="flex cursor-pointer items-center gap-2.5">
+        <input
+          type="checkbox"
+          name="isHalal"
+          defaultChecked={restaurant?.isHalal ?? false}
+          className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+        />
+        <span className="text-sm font-medium text-slate-700">Halal certified</span>
+        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+          HALAL
+        </span>
+      </label>
     </>
   );
 }

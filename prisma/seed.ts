@@ -198,7 +198,7 @@ async function main() {
 
   // --- Catalogue -------------------------------------------------------
   const catalogue: Array<{
-    restaurant: { code: string; name: string; cuisine: string; contactName: string; contactPhone: string };
+    restaurant: { code: string; name: string; cuisine: string; contactName: string; contactPhone: string; isHalal: boolean };
     dishes: Array<{
       code: string;
       name: string;
@@ -215,6 +215,7 @@ async function main() {
           cuisine: 'Mamak',
           contactName: 'Encik Zul',
           contactPhone: '03-2141 5678',
+          isHalal: true,
         },
         dishes: [
           {
@@ -237,6 +238,7 @@ async function main() {
           cuisine: 'Chinese',
           contactName: 'Ah Seng',
           contactPhone: '03-7788 1234',
+          isHalal: false,
         },
         dishes: [
           {
@@ -259,6 +261,7 @@ async function main() {
           cuisine: 'Healthy',
           contactName: 'Melissa Koh',
           contactPhone: '012-345 6789',
+          isHalal: false,
         },
         dishes: [
           {
@@ -286,6 +289,7 @@ async function main() {
           cuisine: 'Indonesian',
           contactName: 'Bu Tini',
           contactPhone: '011-2233 4455',
+          isHalal: true,
         },
         dishes: [
           { code: 'D-013', name: 'Nasi Ayam Penyet', priceSen: 1350, category: 'Main', tags: ['halal', 'spicy'] },
@@ -306,7 +310,7 @@ async function main() {
   for (const entry of catalogue) {
     const restaurant = await prisma.restaurant.upsert({
       where: { name: entry.restaurant.name },
-      update: { code: entry.restaurant.code },
+      update: { code: entry.restaurant.code, isHalal: entry.restaurant.isHalal },
       create: entry.restaurant,
     });
 
