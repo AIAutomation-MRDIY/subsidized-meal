@@ -100,19 +100,17 @@ function Fields({ rule, departments }: { rule?: RuleFields; departments: string[
         </div>
         <div>
           <label className="label">{t('department')}</label>
-          <input
+          <select
             name="department"
-            list="department-list"
             defaultValue={rule?.department ?? ''}
             className="input"
             disabled={scope === 'ALL'}
-            placeholder={scope === 'ALL' ? '—' : 'Operations'}
-          />
-          <datalist id="department-list">
+          >
+            <option value="">— select department —</option>
             {departments.map((d) => (
-              <option key={d} value={d} />
+              <option key={d} value={d}>{d}</option>
             ))}
-          </datalist>
+          </select>
         </div>
       </div>
 
