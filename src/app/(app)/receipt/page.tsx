@@ -6,6 +6,7 @@ import { autoConfirmAllPastMeals } from '@/lib/meal-receipt';
 import { cyclePhase, formatDate, formatDateTime, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { deliverySiteSheet } from '@/lib/delivery';
 import { PageHeader, Section, EmptyState, PhaseBadge, Stat } from '@/components/ui';
+import { EmployeeReceiptTable, type ReceiptGroup } from './employee-receipt-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -245,6 +246,7 @@ export default async function ReceiptPage({
       dishName: true,
       restaurantName: true,
       receivedAt: true,
+      notReceivedAt: true,
       order: {
         select: {
           user: { select: { name: true, staffId: true, department: true } },
@@ -255,18 +257,43 @@ export default async function ReceiptPage({
     orderBy: [{ serviceDate: 'asc' }, { order: { user: { name: 'asc' } } }],
   });
 
-  // Summary stats
-  const totalItems = orderItems.length;
-  const confirmedItems = orderItems.filter((i) => i.receivedAt !== null).length;
-  const pendingItems = totalItems - confirmedItems;
+  // Compute status for each item using the same logic everywhere
+  const itemsWithStatus = orderItems.map((item) => ({
+    ...item,
+    status: (item.notReceivedAt ? 'not-received' : item.receivedAt ? 'confirmed' : 'pending') as 'confirmed' | 'not-received' | 'pending',
+  }));
 
-  // Group by service date for the table sections
-  const byDate = new Map<string, typeof orderItems>();
-  for (const item of orderItems) {
-    const key = toDateKey(item.serviceDate);
-    const bucket = byDate.get(key);
-    if (bucket) bucket.push(item);
-    else byDate.set(key, [item]);
+  // Summary stats — derived from the same status computation as the grouped view
+  const totalItems = itemsWithStatus.length;
+  const confirmedItems = itemsWithStatus.filter((i) => i.status === 'confirmed').length;
+  const notReceivedItems = itemsWithStatus.filter((i) => i.status === 'not-received').length;
+  const pendingItems = itemsWithStatus.filter((i) => i.status === 'pending').length;
+
+  // Group by service date, then by dish + restaurant + delivery site for the popup tables
+  const byDate = new Map<string, ReceiptGroup[]>();
+  for (const item of itemsWithStatus) {
+    const dateKey = toDateKey(item.serviceDate);
+    if (!byDate.has(dateKey)) byDate.set(dateKey, []);
+    const groups = byDate.get(dateKey)!;
+
+    const siteName = item.order.deliverySite?.name ?? '—';
+    const groupKey = `${item.restaurantName}|${item.dishName}|${siteName}`;
+    let g = groups.find((x) => `${x.restaurantName}|${x.dishName}|${x.deliverySiteName}` === groupKey);
+    if (!g) {
+      g = { dishName: item.dishName, restaurantName: item.restaurantName, deliverySiteName: siteName, total: 0, confirmed: 0, notReceived: 0, pending: 0, employees: [] };
+      groups.push(g);
+    }
+
+    g.total++;
+    if (item.status === 'confirmed') g.confirmed++;
+    else if (item.status === 'not-received') g.notReceived++;
+    else g.pending++;
+    g.employees.push({ name: item.order.user.name, staffId: item.order.user.staffId, department: item.order.user.department, status: item.status });
+  }
+  // Sort groups and employees within each day
+  for (const groups of byDate.values()) {
+    groups.sort((a, b) => a.restaurantName.localeCompare(b.restaurantName) || a.dishName.localeCompare(b.dishName));
+    for (const g of groups) g.employees.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   return (
@@ -274,18 +301,20 @@ export default async function ReceiptPage({
       {header}
       {tabBar}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+      <div className="mb-6 grid gap-4 sm:grid-cols-4">
         <Stat label="Total Meals" value={totalItems} />
         <Stat label="Confirmed" value={confirmedItems} tone={confirmedItems === totalItems && totalItems > 0 ? 'positive' : 'default'} />
         <Stat label="Pending" value={pendingItems} tone={pendingItems > 0 ? 'warning' : 'default'} />
+        <Stat label="Not Received" value={notReceivedItems} tone={notReceivedItems > 0 ? 'warning' : 'default'} />
       </div>
 
       {orderItems.length === 0 ? (
         <EmptyState title="No paid orders for this week yet" hint="Orders need to be paid before they appear here." />
       ) : (
         <div className="grid gap-6">
-          {[...byDate.entries()].map(([dateKey, items]) => {
-            const dayConfirmed = items.filter((i) => i.receivedAt !== null).length;
+          {[...byDate.entries()].map(([dateKey, groups]) => {
+            const dayConfirmed = groups.reduce((s, g) => s + g.confirmed, 0);
+            const dayTotal = groups.reduce((s, g) => s + g.total, 0);
             const [year, month, day] = dateKey.split('-').map(Number);
             const dateObj = new Date(Date.UTC(year, month - 1, day));
 
@@ -293,49 +322,9 @@ export default async function ReceiptPage({
               <Section
                 key={dateKey}
                 title={`${formatDate(dateObj, 'weekday', locale)} · ${formatDate(dateObj, 'long', locale)}`}
-                description={`${dayConfirmed} of ${items.length} confirmed`}
+                description={`${dayConfirmed} of ${dayTotal} confirmed`}
               >
-                <div className="overflow-x-auto">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Employee</th>
-                        <th>Department</th>
-                        <th>Delivery Site</th>
-                        <th>Dish</th>
-                        <th>Status</th>
-                        <th>Confirmed At</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((item, idx) => (
-                        <tr key={idx}>
-                          <td className="font-medium text-slate-900">
-                            {item.order.user.name}
-                            {item.order.user.staffId ? (
-                              <span className="ml-1.5 font-mono text-xs text-slate-400">
-                                {item.order.user.staffId}
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="text-slate-600">{item.order.user.department ?? '—'}</td>
-                          <td className="text-slate-600">{item.order.deliverySite?.name ?? '—'}</td>
-                          <td className="text-slate-700">{item.dishName}</td>
-                          <td>
-                            {item.receivedAt ? (
-                              <span className="badge bg-emerald-100 text-emerald-800">Confirmed</span>
-                            ) : (
-                              <span className="badge bg-amber-100 text-amber-800">Pending</span>
-                            )}
-                          </td>
-                          <td className="text-xs text-slate-500 whitespace-nowrap">
-                            {item.receivedAt ? formatDateTime(item.receivedAt, locale) : '—'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <EmployeeReceiptTable groups={groups} />
               </Section>
             );
           })}
