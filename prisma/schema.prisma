@@ -409,6 +409,10 @@ model OrderItem {
   /// false when the employee confirmed it manually.
   receivedBySystem Boolean  @default(false)
 
+  /// Set when the employee explicitly reports they did NOT receive their meal.
+  /// The auto-confirm sweep skips any item where this is non-null.
+  notReceivedAt    DateTime?
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

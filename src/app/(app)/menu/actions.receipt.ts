@@ -29,6 +29,7 @@ async function loadAndGuardItem(userId: string, orderItemId: string) {
       serviceDate: true,
       receivedAt: true,
       receivedBySystem: true,
+      notReceivedAt: true,
       order: { select: { userId: true, status: true } },
     },
   });
@@ -113,6 +114,66 @@ export async function undoMealReceived(orderItemId: string): Promise<ReceiptResu
     serviceDate: toDateKey(item.serviceDate),
   });
 
+  revalidatePath('/menu');
+  return { ok: true };
+}
+
+/**
+ * Employee reports they did NOT receive their meal.
+ * Clears any existing receivedAt, blocks the auto-confirm sweep, and
+ * writes an audit entry so admin can review.
+ */
+export async function markMealNotReceived(orderItemId: string): Promise<ReceiptResult> {
+  const user = await assertCapability('order:place');
+
+  const guard = await loadAndGuardItem(user.id, orderItemId);
+  if (!guard.ok) return guard;
+
+  const { item } = guard;
+  if (item.notReceivedAt) return { ok: true }; // already flagged
+
+  await prisma.orderItem.update({
+    where: { id: orderItemId },
+    data: { notReceivedAt: new Date(), receivedAt: null, receivedBySystem: false },
+  });
+
+  await audit(user.id, 'meal.not_received', 'OrderItem', orderItemId, {
+    serviceDate: toDateKey(item.serviceDate),
+  });
+
+  revalidatePath('/my-meals');
+  revalidatePath('/menu');
+  return { ok: true };
+}
+
+/**
+ * Undoes a "not received" report — only before the cutoff hour.
+ */
+export async function undoMealNotReceived(orderItemId: string): Promise<ReceiptResult> {
+  const user = await assertCapability('order:place');
+
+  const guard = await loadAndGuardItem(user.id, orderItemId);
+  if (!guard.ok) return guard;
+
+  const { item } = guard;
+  if (!item.notReceivedAt) return { ok: true }; // nothing to undo
+
+  const [y, m, d] = toDateKey(item.serviceDate).split('-').map(Number);
+  const cutoff = zonedToUtc(y, m, d, 18, 0, APP_TIMEZONE);
+  if (new Date() >= cutoff) {
+    return { ok: false, error: 'The reporting window has closed; contact your administrator.' };
+  }
+
+  await prisma.orderItem.update({
+    where: { id: orderItemId },
+    data: { notReceivedAt: null },
+  });
+
+  await audit(user.id, 'meal.not_received.undo', 'OrderItem', orderItemId, {
+    serviceDate: toDateKey(item.serviceDate),
+  });
+
+  revalidatePath('/my-meals');
   revalidatePath('/menu');
   return { ok: true };
 }

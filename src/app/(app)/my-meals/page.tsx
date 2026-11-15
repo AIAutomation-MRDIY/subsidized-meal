@@ -1,3 +1,4 @@
+import type React from 'react';
 import { getLocale } from 'next-intl/server';
 
 import { prisma } from '@/lib/prisma';
@@ -47,6 +48,7 @@ export default async function MyMealsPage({
     serviceDate: true,
     receivedAt: true,
     receivedBySystem: true,
+    notReceivedAt: true,
     order: {
       select: {
         cycle: { select: { serviceWeekStart: true } },
@@ -188,7 +190,8 @@ export default async function MyMealsPage({
                   orderItemId={item.id}
                   receivedAt={item.receivedAt}
                   receivedBySystem={item.receivedBySystem}
-                  canUndo={!cutoffPassed && item.receivedAt !== null && !item.receivedBySystem}
+                  notReceivedAt={item.notReceivedAt}
+                  canUndo={!cutoffPassed && !item.receivedBySystem && (item.receivedAt !== null || item.notReceivedAt !== null)}
                   receivedAtLabel={item.receivedAt ? formatDateTime(item.receivedAt, locale) : undefined}
                 />
               </li>
@@ -239,7 +242,22 @@ export default async function MyMealsPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item) => (
+                      {items.map((item) => {
+                        const dateKey = toDateKey(item.serviceDate);
+                        const isPast = dateKey < todayKey;
+                        let statusBadge: React.ReactNode;
+                        if (item.notReceivedAt) {
+                          statusBadge = <span className="badge bg-red-100 text-red-700">Not Received</span>;
+                        } else if (item.receivedAt) {
+                          statusBadge = item.receivedBySystem
+                            ? <span className="badge bg-slate-100 text-slate-600">Auto-confirmed</span>
+                            : <span className="badge bg-emerald-100 text-emerald-800">Confirmed</span>;
+                        } else if (isPast) {
+                          statusBadge = <span className="badge bg-amber-100 text-amber-700">Not Confirmed</span>;
+                        } else {
+                          statusBadge = <span className="badge bg-blue-100 text-blue-800">Upcoming</span>;
+                        }
+                        return (
                         <tr key={item.id}>
                           <td className="whitespace-nowrap text-slate-700">
                             {formatDate(item.serviceDate, 'long', locale)}
@@ -252,18 +270,13 @@ export default async function MyMealsPage({
                           <td className="text-xs text-slate-500 whitespace-nowrap">
                             {item.order.paidAt ? formatDateTime(item.order.paidAt, locale) : '—'}
                           </td>
-                          <td>
-                            {item.receivedAt ? (
-                              <span className="badge bg-emerald-100 text-emerald-800">Confirmed</span>
-                            ) : (
-                              <span className="badge bg-blue-100 text-blue-800">Paid</span>
-                            )}
-                          </td>
+                          <td>{statusBadge}</td>
                           <td className="text-xs text-slate-500 whitespace-nowrap">
                             {item.receivedAt ? formatDateTime(item.receivedAt, locale) : '—'}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
