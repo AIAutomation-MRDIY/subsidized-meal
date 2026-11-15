@@ -773,17 +773,30 @@ async function exportVendorOrders(
 
   for (const [dateKey, dayRows] of [...byDay.entries()].sort()) {
     const nData  = dayRows.length;
-    const nWH    = WH_ORDER.length;   // 10 warehouses → TOTAL at row nWH+2 (row 12 when header=1)
-    const nCO    = CO_ORDER.length;   // 4 companies  → TOTAL at row nCO+2  (row 6  when header=1)
-    const maxRows = Math.max(nData, nWH + 1, nCO + 1); // +1 for TOTAL row
+    const nWH    = WH_ORDER.length;
+    const nCO    = CO_ORDER.length;
+
+    // Pre-compute counts so formula cells have real values on open
+    const whCounts = new Map<string, number>();
+    const coCounts = new Map<string, number>();
+    const dishCounts = new Map<string, number>();
+    for (const row of dayRows) {
+      whCounts.set(row.warehouse, (whCounts.get(row.warehouse) ?? 0) + 1);
+      coCounts.set(row.company, (coCounts.get(row.company) ?? 0) + 1);
+      dishCounts.set(row.dishName, (dishCounts.get(row.dishName) ?? 0) + 1);
+    }
+    const dishEntries = [...dishCounts.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const nDish = dishEntries.length;
+
+    const maxRows = Math.max(nData, nWH + 1, nCO + 1, nDish + 1);
 
     const ws: XLSX.WorkSheet = {};
 
     // ── Helper to set a cell ──────────────────────────────────────────────────
-    function sc(addr: string, value: string | number | null, isFormula = false) {
+    function sc(addr: string, value: string | number | null, isFormula = false, precomputed = 0) {
       if (value === null) return;
       if (isFormula && typeof value === 'string') {
-        ws[addr] = { t: 'n', f: value.replace(/^=/, ''), v: 0 };
+        ws[addr] = { t: 'n', f: value.replace(/^=/, ''), v: precomputed };
       } else if (typeof value === 'number') {
         ws[addr] = { t: 'n', v: value };
       } else {
@@ -832,21 +845,19 @@ async function exportVendorOrders(
       // Row 12: TOTAL with SUM(J2:J11)
       if (i < nWH) {
         sc(`I${r}`, WH_ORDER[i]);
-        sc(`J${r}`, `COUNTIFS(F:F,I${r})`, true); // no leading = for f property
+        sc(`J${r}`, `COUNTIFS(F:F,I${r})`, true, whCounts.get(WH_ORDER[i]) ?? 0);
       } else if (i === nWH) {
         sc(`I${r}`, 'TOTAL');
-        sc(`J${r}`, `SUM(J2:J${nWH + 1})`, true);
+        sc(`J${r}`, `SUM(J2:J${nWH + 1})`, true, nData);
       }
 
       // ── Company summary (col L, M) ──
-      // Rows 2–5: one per company (4 companies)
-      // Row 6: TOTAL with SUM(M2:M5)
       if (i < nCO) {
         sc(`L${r}`, CO_ORDER[i]);
-        sc(`M${r}`, `COUNTIFS(B$1:B$64417,L${r})`, true);
+        sc(`M${r}`, `COUNTIFS(B$1:B$64417,L${r})`, true, coCounts.get(CO_ORDER[i]) ?? 0);
       } else if (i === nCO) {
         sc(`L${r}`, 'TOTAL');
-        sc(`M${r}`, `SUM(M2:M${nCO + 1})`, true);
+        sc(`M${r}`, `SUM(M2:M${nCO + 1})`, true, nData);
       }
 
       // Yellow fill on Qty formula cells
@@ -856,11 +867,25 @@ async function exportVendorOrders(
       if (ws[mAddr]) ws[mAddr].s = { fill: { fgColor: { rgb: 'FFFF00' }, patternType: 'solid' } };
     }
 
+    // ── Dish summary (col O, P) ──
+    sc('O1', 'Dish');
+    sc('P1', 'Qty');
+    if (ws['O1']) ws['O1'].s = { font: { bold: true } };
+    if (ws['P1']) ws['P1'].s = { font: { bold: true } };
+    dishEntries.forEach(([dish, qty], di) => {
+      sc(`O${di + 2}`, dish);
+      sc(`P${di + 2}`, qty);
+      if (ws[`P${di + 2}`]) ws[`P${di + 2}`].s = { fill: { fgColor: { rgb: 'FFFF00' }, patternType: 'solid' } };
+    });
+    sc(`O${nDish + 2}`, 'TOTAL');
+    sc(`P${nDish + 2}`, nData);
+    if (ws[`P${nDish + 2}`]) ws[`P${nDish + 2}`].s = { fill: { fgColor: { rgb: 'FFFF00' }, patternType: 'solid' } };
+
     // Set sheet ref
     const lastRow = maxRows + 1;
-    ws['!ref'] = `A1:M${lastRow}`;
+    ws['!ref'] = `A1:P${lastRow}`;
 
-    // Column widths (exact match to template)
+    // Column widths (exact match to template, plus dish summary)
     ws['!cols'] = [
       { wch: 7.7 },   // A: No
       { wch: 32.1 },  // B: Company
@@ -875,6 +900,9 @@ async function exportVendorOrders(
       { wch: 0 },     // K: hidden separator
       { wch: 34.9 },  // L: Company summary
       { wch: 8.7 },   // M: Qty
+      { wch: 0 },     // N: hidden separator
+      { wch: 60.0 },  // O: Dish name
+      { wch: 8.7 },   // P: Qty
     ];
 
     const sheetName = dateKey.replace(/-/g, '');

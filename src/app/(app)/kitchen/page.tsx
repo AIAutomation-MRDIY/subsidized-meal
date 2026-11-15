@@ -68,6 +68,7 @@ export default async function KitchenPage({
     staffId: string | null;
     department: string | null;
     deliverySiteName: string;
+    status: 'confirmed' | 'not-received' | 'pending';
   }[] = [];
 
   if (expandKey) {
@@ -90,6 +91,9 @@ export default async function KitchenPage({
           },
         },
         select: {
+          receivedAt: true,
+          receivedBySystem: true,
+          notReceivedAt: true,
           order: {
             select: {
               user: { select: { name: true, staffId: true, department: true } },
@@ -105,6 +109,7 @@ export default async function KitchenPage({
         staffId: i.order.user.staffId,
         department: i.order.user.department,
         deliverySiteName: i.order.deliverySite?.name ?? 'Unassigned',
+        status: i.notReceivedAt ? 'not-received' : i.receivedAt ? 'confirmed' : 'pending',
       }));
     }
   }
@@ -308,6 +313,7 @@ export default async function KitchenPage({
                                             <th className="py-1.5 text-left font-medium">Staff ID</th>
                                             <th className="py-1.5 text-left font-medium">Department</th>
                                             <th className="py-1.5 text-left font-medium">Delivery Site</th>
+                                            <th className="py-1.5 text-left font-medium">Status</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -318,6 +324,11 @@ export default async function KitchenPage({
                                               <td className="py-1.5 font-mono text-slate-500">{emp.staffId ?? '—'}</td>
                                               <td className="py-1.5 text-slate-500">{emp.department ?? '—'}</td>
                                               <td className="py-1.5 text-slate-500">{emp.deliverySiteName}</td>
+                                              <td className="py-1.5">
+                                                {emp.status === 'confirmed' && <span className="text-emerald-600 font-medium">Confirmed</span>}
+                                                {emp.status === 'not-received' && <span className="text-red-600 font-medium">Not Received</span>}
+                                                {emp.status === 'pending' && <span className="text-amber-600 font-medium">Pending</span>}
+                                              </td>
                                             </tr>
                                           ))}
                                         </tbody>

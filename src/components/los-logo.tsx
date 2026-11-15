@@ -6,7 +6,7 @@ const config: Record<Size, { icon: string; title: string; gap: string }> = {
   lg: { icon: 'h-16 w-16', title: 'text-2xl font-bold', gap: 'gap-3' },
 };
 
-export function LOSLogo({ size = 'md', stacked = false }: { size?: Size; stacked?: boolean }) {
+export function LOSLogo({ size = 'md', stacked = false, showText = true }: { size?: Size; stacked?: boolean; showText?: boolean }) {
   const c = config[size];
 
   const icon = (
@@ -20,13 +20,13 @@ export function LOSLogo({ size = 'md', stacked = false }: { size?: Size; stacked
         strokeLinejoin="round"
         className="h-[58%] w-[58%]"
       >
-        {/* Fork */}
         <path d="M7 2v4m0 0c0 1.1.9 2 2 2s2-.9 2-2V2M9 8v14" />
-        {/* Knife */}
         <path d="M15 2c0 0 2 2.5 2 5s-2 3-2 3v12" />
       </svg>
     </div>
   );
+
+  if (!showText) return icon;
 
   const text = (
     <div className={`${c.title} leading-tight tracking-tight text-slate-900`}>
