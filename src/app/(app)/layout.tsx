@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
 import { requireUser } from '@/lib/session';
@@ -7,6 +8,7 @@ import { can, ROLE_LABEL } from '@/lib/rbac';
 import { getSiteSettings } from '@/lib/settings';
 import { LOSLogo } from '@/components/los-logo';
 import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
+import { toDateKey } from '@/lib/cycle';
 import { SidebarScroll } from '@/components/sidebar-scroll';
 import { WindowScrollObserver } from '@/components/window-scroll-observer';
 import { UserMenu } from '@/components/user-menu';
@@ -43,6 +45,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const t = await getTranslations('nav');
   const settings = await getSiteSettings();
+
+  // Kitchen "not received" badge — only computed for users who can see /kitchen
+  let kitchenBadge = false;
+  if (user.superAdmin || can(user.role, 'kitchen:view')) {
+    const cookieStore = await cookies();
+    const lastViewedStr = cookieStore.get('kitchen_nr_viewed_at')?.value;
+    const lastViewed = lastViewedStr ? new Date(parseInt(lastViewedStr, 10)) : new Date(0);
+    const todayUtc = new Date(toDateKey(new Date()) + 'T00:00:00.000Z');
+    const newCount = await prisma.orderItem.count({
+      where: {
+        notReceivedAt: { not: null, gt: lastViewed },
+        serviceDate: todayUtc,
+        order: { status: 'PAID' },
+      },
+    });
+    kitchenBadge = newCount > 0;
+  }
 
   const groups: NavGroup[] = [];
 
@@ -85,7 +104,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (isSuperAdmin || can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: t('analytics') });
   if (isSuperAdmin || can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
   if (isSuperAdmin || can(user.role, 'kitchen:view'))
-    insights.items.push({ href: '/kitchen', label: t('kitchenCounts') });
+    insights.items.push({ href: '/kitchen', label: t('kitchenCounts'), badge: kitchenBadge });
   if (isSuperAdmin || can(user.role, 'analytics:view'))
     insights.items.push({ href: '/receipt', label: 'Receipt Confirmation' });
   if (insights.items.length) groups.push(insights);

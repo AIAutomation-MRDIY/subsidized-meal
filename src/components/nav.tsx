@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 import { ScrollFadeRow } from '@/components/scroll-fade-row';
 
-export type NavItem = { href: string; label: string };
+export type NavItem = { href: string; label: string; badge?: boolean };
 export type NavGroup = { heading: string; items: NavItem[] };
 
 function useIsActive() {
@@ -31,7 +31,7 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
                   <Link
                     href={item.href}
                     aria-current={active ? 'page' : undefined}
-                    className={`relative block rounded-lg px-3 py-2 text-sm transition-colors ${
+                    className={`relative flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors ${
                       active
                         ? 'bg-brand-50 font-medium text-brand-800'
                         : 'text-slate-600 hover:bg-slate-200/60 hover:text-slate-900'
@@ -40,7 +40,10 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
                     {active ? (
                       <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-brand-600" />
                     ) : null}
-                    {item.label}
+                    <span>{item.label}</span>
+                    {item.badge && !active ? (
+                      <span className="ml-2 h-2 w-2 shrink-0 rounded-full bg-red-500" />
+                    ) : null}
                   </Link>
                 </li>
               );
@@ -72,13 +75,16 @@ export function MobileNav({ groups }: { groups: NavGroup[] }) {
               key={item.href}
               href={item.href}
               aria-current={active ? 'page' : undefined}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors ${
+              className={`relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-sm transition-colors ${
                 active
                   ? 'bg-brand-600 font-medium text-white'
                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               {item.label}
+              {item.badge && !active ? (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+              ) : null}
             </Link>
           );
         })}

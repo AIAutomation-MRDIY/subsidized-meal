@@ -7,6 +7,7 @@ import { requireCapability } from '@/lib/session';
 import { cyclePhase, formatDate, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { kitchenSheet } from '@/lib/reporting';
 import { PageHeader, Section, EmptyState, PhaseBadge, Alert, Stat } from '@/components/ui';
+import { KitchenViewedMarker } from '@/components/kitchen-viewed-marker';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,23 @@ export default async function KitchenPage({
   const selected = cycles.find((c) => c.id === params.cycle) ?? cycles[0];
   const phase = cyclePhase(selected);
   const sheet = await kitchenSheet(selected.id);
+
+  // Today's "not received" reports — alert admin so they can follow up
+  const todayUtc = new Date(toDateKey(new Date()) + 'T00:00:00.000Z');
+  const notReceivedToday = await prisma.orderItem.findMany({
+    where: {
+      notReceivedAt: { not: null },
+      serviceDate: todayUtc,
+      order: { status: 'PAID' },
+    },
+    select: {
+      id: true,
+      dishName: true,
+      restaurantName: true,
+      order: { select: { user: { select: { name: true, staffId: true, department: true } } } },
+    },
+    orderBy: { notReceivedAt: 'asc' },
+  });
 
   const expandKey = params.expand ?? null;
 
@@ -112,6 +130,7 @@ export default async function KitchenPage({
 
   return (
     <>
+      <KitchenViewedMarker />
       <PageHeader
         title={t('title')}
         subtitle={
@@ -174,6 +193,24 @@ export default async function KitchenPage({
           <Alert tone="warning">{t('stillOpenWarning')}</Alert>
         </div>
       ) : null}
+
+      {notReceivedToday.length > 0 && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+          <p className="mb-2 text-sm font-semibold text-red-800">
+            {notReceivedToday.length} employee{notReceivedToday.length !== 1 ? 's' : ''} reported not receiving their meal today
+          </p>
+          <ul className="space-y-1">
+            {notReceivedToday.map((item) => (
+              <li key={item.id} className="text-xs text-red-700">
+                <span className="font-medium">{item.order.user.name}</span>
+                {item.order.user.staffId ? ` (${item.order.user.staffId})` : ''}
+                {item.order.user.department ? ` · ${item.order.user.department}` : ''}
+                {' — '}{item.dishName} from {item.restaurantName}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mb-6 grid gap-4 text-center sm:grid-cols-3">
         <Stat label={t('totalPortions')} value={totalPortions.toLocaleString()} />
