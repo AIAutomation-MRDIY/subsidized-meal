@@ -148,7 +148,7 @@ export async function markMealNotReceived(orderItemId: string): Promise<ReceiptR
     where: { id: orderItemId },
     select: {
       serviceDate: true,
-      dish: { select: { name: true } },
+      dishName: true,
       order: { select: { reference: true } },
     },
   }).then((detail) => {
@@ -159,7 +159,7 @@ export async function markMealNotReceived(orderItemId: string): Promise<ReceiptR
     }).then((admins) => {
       const { subject, html } = mealNotReceivedAdminEmail({
         employeeName: user.name,
-        dishName: detail.dish.name,
+        dishName: detail.dishName,
         serviceDate: toDateKey(detail.serviceDate),
         orderReference: detail.order.reference,
         appUrl: process.env.APP_URL ?? '',
