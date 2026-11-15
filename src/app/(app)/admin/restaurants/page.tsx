@@ -57,6 +57,7 @@ export default async function RestaurantsPage({
                   <th>{t('code')}</th>
                   <th>{c('name')}</th>
                   <th>{t('cuisine')}</th>
+                  <th>Halal</th>
                   <th>{t('contact')}</th>
                   <th className="num">{t('dishes')}</th>
                   <th>{c('status')}</th>
@@ -74,6 +75,15 @@ export default async function RestaurantsPage({
                       ) : null}
                     </td>
                     <td className="text-slate-600">{r.cuisine ?? '—'}</td>
+                    <td>
+                      {r.isHalal ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">
+                          HALAL
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="text-slate-600">
                       {r.contactName ?? '—'}
                       {r.contactPhone ? (

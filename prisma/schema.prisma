@@ -183,6 +183,7 @@ model Restaurant {
   contactPhone String?
   address     String?
   active      Boolean  @default(true)
+  isHalal     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
