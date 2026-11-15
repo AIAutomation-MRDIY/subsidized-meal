@@ -8,6 +8,7 @@ import { formatSen } from '@/lib/money';
 import { formatWeekRange, formatDateTime, todayInAppTz, toDateKey } from '@/lib/cycle';
 import { PageHeader, Section, EmptyState, StatusBadge, Stat } from '@/components/ui';
 import { Pagination, parsePage, parsePageSize } from '@/components/pagination';
+import { dismissRefundBanner } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export default async function OrdersPage({
     orderBy: { serviceWeekStart: 'desc' },
   });
 
-  const [total, allPaid, orders] = await Promise.all([
+  const [total, allPaid, orders, unseenRefunds] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
       where: { ...allTimeWhere, status: 'PAID' },
@@ -62,6 +63,11 @@ export default async function OrdersPage({
         _count: { select: { items: true } },
       },
     }),
+    prisma.order.findMany({
+      where: { userId: user.id, status: 'REFUNDED', refundSeenAt: null },
+      select: { id: true, reference: true, netSen: true, cycle: { select: { serviceWeekStart: true } } },
+      orderBy: { cancelledAt: 'desc' },
+    }),
   ]);
 
   const spent = allPaid.reduce((s, o) => s + o.netSen, 0);
@@ -71,6 +77,30 @@ export default async function OrdersPage({
 
   return (
     <>
+      {unseenRefunds.map((o) => (
+        <div key={o.id} className="mb-4 flex items-start justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+          <div className="flex items-start gap-3">
+            <svg className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-emerald-900">
+                Refund processed — {formatSen(o.netSen)}
+              </p>
+              <p className="text-xs text-emerald-700">
+                Order <span className="font-mono">{o.reference}</span> · {formatWeekRange(o.cycle.serviceWeekStart, locale)} · Allow 3–10 business days to appear in your account.
+              </p>
+            </div>
+          </div>
+          <form action={dismissRefundBanner}>
+            <input type="hidden" name="orderId" value={o.id} />
+            <button type="submit" className="shrink-0 text-xs text-emerald-600 underline decoration-dotted hover:text-emerald-800">
+              Dismiss
+            </button>
+          </form>
+        </div>
+      ))}
+
       <PageHeader
         title={t('title')}
         subtitle={t('subtitle')}

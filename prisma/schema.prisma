@@ -366,6 +366,7 @@ model Order {
   cancelReason        String?
   refundAttempts      Int       @default(0)
   lastRefundAttemptAt DateTime?
+  refundSeenAt        DateTime?
 
   deliverySiteId String?
   deliverySite   DeliverySite? @relation(fields: [deliverySiteId], references: [id])

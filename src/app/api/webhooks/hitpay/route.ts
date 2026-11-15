@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { mapPaymentStatus, parseAmountToSen, verifyWebhookSignature, fetchPaymentType } from '@/lib/hitpay';
 import { getEntityCredentials } from '@/lib/entity-config';
+import { sendEmail } from '@/lib/email';
+import { orderConfirmedEmail } from '@/lib/email-templates';
+import { formatWeekRange } from '@/lib/cycle';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -168,6 +171,31 @@ export async function POST(request: Request) {
       },
     });
   });
+
+  // Fire order confirmed email non-blocking — must not delay the webhook response to HitPay
+  if (status === 'SUCCEEDED' && order.status === 'AWAITING_PAYMENT') {
+    prisma.order.findUnique({
+      where: { id: order.id },
+      select: {
+        reference: true,
+        netSen: true,
+        user: { select: { name: true, email: true } },
+        cycle: { select: { serviceWeekStart: true } },
+        _count: { select: { items: true } },
+      },
+    }).then((o) => {
+      if (!o?.user.email) return;
+      const { subject, html } = orderConfirmedEmail({
+        name: o.user.name,
+        reference: o.reference,
+        amountSen: o.netSen,
+        serviceWeek: formatWeekRange(o.cycle.serviceWeekStart),
+        mealCount: o._count.items,
+        appUrl: process.env.APP_URL ?? '',
+      });
+      return sendEmail({ to: o.user.email, subject, html });
+    }).catch((err) => console.error('[webhook] order confirmed email failed for', order.reference, err));
+  }
 
   return NextResponse.json({ received: true });
 }
