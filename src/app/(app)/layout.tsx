@@ -83,26 +83,31 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       heading: t('administration'),
       items: [
         { href: '/admin/cycles', label: t('weeklyMenus') },
-        { href: '/admin/restaurants', label: t('restaurants') },
-        { href: '/admin/delivery-sites', label: t('deliverySites') },
-        { href: '/admin/dishes', label: t('dishesPrices') },
-        { href: '/admin/subsidies', label: t('subsidies') },
-        { href: '/admin/users', label: t('usersRoles') },
-        { href: '/admin/invoices', label: 'Vendor Invoices' },
-        ...(isSuperAdmin || can(user.role, 'settings:manage')
-          ? [
-              { href: '/admin/bulk-refund', label: t('bulkRefund') },
-              { href: '/admin/companies', label: 'Companies' },
-              { href: '/admin/settings', label: t('settings') },
-              { href: '/admin/audit', label: 'Audit Log' },
-            ]
-          : []),
+        ...(isSuperAdmin || can(user.role, 'catalogue:manage') ? [
+          { href: '/admin/restaurants', label: t('restaurants') },
+          { href: '/admin/delivery-sites', label: t('deliverySites') },
+          { href: '/admin/dishes', label: t('dishesPrices') },
+          { href: '/admin/invoices', label: 'Vendor Invoices' },
+        ] : []),
+        ...(isSuperAdmin || can(user.role, 'subsidy:manage') ? [{ href: '/admin/subsidies', label: t('subsidies') }] : []),
+        ...(isSuperAdmin || can(user.role, 'users:manage') ? [{ href: '/admin/users', label: t('usersRoles') }] : []),
+        { href: '/admin/bulk-refund', label: t('bulkRefund') },
+        ...(isSuperAdmin || can(user.role, 'settings:manage') ? [
+          { href: '/admin/companies', label: 'Companies' },
+          { href: '/admin/settings', label: t('settings') },
+        ] : []),
+        ...(isSuperAdmin || can(user.role, 'audit:view') ? [{ href: '/admin/audit', label: 'Audit Log' }] : []),
       ],
     });
   }
   const insights: NavGroup = { heading: t('insights'), items: [] };
   if (isSuperAdmin || can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: t('analytics') });
   if (isSuperAdmin || can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
+  // Show Vendor Invoices + Audit Log in insights for finance users (admins already see both in the admin section)
+  if (!isSuperAdmin && can(user.role, 'finance:view') && !can(user.role, 'menu:plan'))
+    insights.items.push({ href: '/admin/invoices', label: 'Vendor Invoices' });
+  if (!isSuperAdmin && can(user.role, 'audit:view') && !can(user.role, 'menu:plan'))
+    insights.items.push({ href: '/admin/audit', label: 'Audit Log' });
   if (isSuperAdmin || can(user.role, 'kitchen:view'))
     insights.items.push({ href: '/kitchen', label: t('kitchenCounts'), badge: kitchenBadge });
   if (isSuperAdmin || can(user.role, 'analytics:view'))
