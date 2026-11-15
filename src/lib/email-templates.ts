@@ -180,6 +180,68 @@ export function orderConfirmedEmail(opts: {
 }
 
 // ---------------------------------------------------------------------------
+// Meal not received — admin alert
+// ---------------------------------------------------------------------------
+
+export function mealNotReceivedAdminEmail(opts: {
+  employeeName: string;
+  dishName: string;
+  serviceDate: string;
+  orderReference: string;
+  appUrl: string;
+}): { subject: string; html: string } {
+  const content = `
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#0f172a">
+      Meal not received — action may be needed
+    </h1>
+    <p style="margin:0 0 24px;font-size:15px;color:#475569">
+      An employee has reported that their meal was not received today.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border:1px solid #fed7aa;border-radius:8px;background:#fff7ed">
+      <tr>
+        <td style="padding:12px 16px;border-bottom:1px solid #fed7aa">
+          <span style="font-size:12px;color:#9a3412">Employee</span>
+          <p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#0f172a">${opts.employeeName}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px;border-bottom:1px solid #fed7aa">
+          <span style="font-size:12px;color:#9a3412">Dish</span>
+          <p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#0f172a">${opts.dishName}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px;border-bottom:1px solid #fed7aa">
+          <span style="font-size:12px;color:#9a3412">Service Date</span>
+          <p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#0f172a">${opts.serviceDate}</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:12px 16px">
+          <span style="font-size:12px;color:#9a3412">Order Reference</span>
+          <p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#0f172a;font-family:monospace">${opts.orderReference}</p>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0 0 24px;font-size:14px;color:#64748b">
+      Please check the Kitchen Counts page for a full list of unreceived meals today, and follow up with the restaurant if needed.
+    </p>
+
+    <a href="${opts.appUrl}/kitchen"
+       style="display:inline-block;background:#c8102e;color:#fff;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;text-decoration:none">
+      View Kitchen Counts
+    </a>
+  `;
+
+  return {
+    subject: `Meal not received — ${opts.employeeName} · ${opts.serviceDate}`,
+    html: layout(content),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Refund queued (employee acknowledgement)
 // ---------------------------------------------------------------------------
 
