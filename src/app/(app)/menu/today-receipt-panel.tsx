@@ -32,6 +32,7 @@ export async function TodayReceiptPanel({ userId, locale }: { userId: string; lo
         serviceDate: true,
         receivedAt: true,
         receivedBySystem: true,
+        notReceivedAt: true,
       },
       orderBy: { dishName: 'asc' },
     }),
@@ -77,7 +78,8 @@ export async function TodayReceiptPanel({ userId, locale }: { userId: string; lo
               orderItemId={item.id}
               receivedAt={item.receivedAt}
               receivedBySystem={item.receivedBySystem}
-              canUndo={!cutoffPassed && item.receivedAt !== null && !item.receivedBySystem}
+              notReceivedAt={item.notReceivedAt}
+              canUndo={!cutoffPassed && !item.receivedBySystem && (item.receivedAt !== null || item.notReceivedAt !== null)}
               receivedAtLabel={item.receivedAt ? formatDateTime(item.receivedAt, locale) : undefined}
             />
           </li>
