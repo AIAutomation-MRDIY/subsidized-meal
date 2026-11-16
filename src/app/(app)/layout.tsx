@@ -1,12 +1,14 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
 import { requireUser } from '@/lib/session';
 import { can, ROLE_LABEL } from '@/lib/rbac';
-import { getSiteSettings } from '@/lib/settings';
+import { getSiteSettings, DEFAULT_SETTINGS } from '@/lib/settings';
 import { LOSLogo } from '@/components/los-logo';
 import { MobileNav, SideNav, type NavGroup } from '@/components/nav';
+import { toDateKey } from '@/lib/cycle';
 import { SidebarScroll } from '@/components/sidebar-scroll';
 import { WindowScrollObserver } from '@/components/window-scroll-observer';
 import { UserMenu } from '@/components/user-menu';
@@ -44,6 +46,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const t = await getTranslations('nav');
   const settings = await getSiteSettings();
 
+  // Kitchen "not received" badge — only computed for users who can see /kitchen
+  let kitchenBadge = false;
+  if (user.superAdmin || can(user.role, 'kitchen:view')) {
+    const cookieStore = await cookies();
+    const lastViewedStr = cookieStore.get('kitchen_nr_viewed_at')?.value;
+    const lastViewed = lastViewedStr ? new Date(parseInt(lastViewedStr, 10)) : new Date(0);
+    const todayUtc = new Date(toDateKey(new Date()) + 'T00:00:00.000Z');
+    const newCount = await prisma.orderItem.count({
+      where: {
+        notReceivedAt: { not: null, gt: lastViewed },
+        serviceDate: todayUtc,
+        order: { status: 'PAID' },
+      },
+    });
+    kitchenBadge = newCount > 0;
+  }
+
   const groups: NavGroup[] = [];
 
   if (can(user.role, 'order:place')) {
@@ -64,28 +83,33 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       heading: t('administration'),
       items: [
         { href: '/admin/cycles', label: t('weeklyMenus') },
-        { href: '/admin/restaurants', label: t('restaurants') },
-        { href: '/admin/delivery-sites', label: t('deliverySites') },
-        { href: '/admin/dishes', label: t('dishesPrices') },
-        { href: '/admin/subsidies', label: t('subsidies') },
-        { href: '/admin/users', label: t('usersRoles') },
-        { href: '/admin/invoices', label: 'Vendor Invoices' },
-        ...(isSuperAdmin || can(user.role, 'settings:manage')
-          ? [
-              { href: '/admin/bulk-refund', label: t('bulkRefund') },
-              { href: '/admin/companies', label: 'Companies' },
-              { href: '/admin/settings', label: t('settings') },
-              { href: '/admin/audit', label: 'Audit Log' },
-            ]
-          : []),
+        ...(isSuperAdmin || can(user.role, 'catalogue:manage') ? [
+          { href: '/admin/restaurants', label: t('restaurants') },
+          { href: '/admin/delivery-sites', label: t('deliverySites') },
+          { href: '/admin/dishes', label: t('dishesPrices') },
+          { href: '/admin/invoices', label: 'Vendor Invoices' },
+        ] : []),
+        ...(isSuperAdmin || can(user.role, 'subsidy:manage') ? [{ href: '/admin/subsidies', label: t('subsidies') }] : []),
+        ...(isSuperAdmin || can(user.role, 'users:manage') ? [{ href: '/admin/users', label: t('usersRoles') }] : []),
+        { href: '/admin/bulk-refund', label: t('bulkRefund') },
+        ...(isSuperAdmin || can(user.role, 'settings:manage') ? [
+          { href: '/admin/companies', label: 'Companies' },
+          { href: '/admin/settings', label: t('settings') },
+        ] : []),
+        ...(isSuperAdmin || can(user.role, 'audit:view') ? [{ href: '/admin/audit', label: 'Audit Log' }] : []),
       ],
     });
   }
   const insights: NavGroup = { heading: t('insights'), items: [] };
   if (isSuperAdmin || can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: t('analytics') });
   if (isSuperAdmin || can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
+  // Show Vendor Invoices + Audit Log in insights for finance users (admins already see both in the admin section)
+  if (!isSuperAdmin && can(user.role, 'finance:view') && !can(user.role, 'menu:plan'))
+    insights.items.push({ href: '/admin/invoices', label: 'Vendor Invoices' });
+  if (!isSuperAdmin && can(user.role, 'audit:view') && !can(user.role, 'menu:plan'))
+    insights.items.push({ href: '/admin/audit', label: 'Audit Log' });
   if (isSuperAdmin || can(user.role, 'kitchen:view'))
-    insights.items.push({ href: '/kitchen', label: t('kitchenCounts') });
+    insights.items.push({ href: '/kitchen', label: t('kitchenCounts'), badge: kitchenBadge });
   if (isSuperAdmin || can(user.role, 'analytics:view'))
     insights.items.push({ href: '/receipt', label: 'Receipt Confirmation' });
   if (insights.items.length) groups.push(insights);
@@ -108,8 +132,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {!user.embed ? (
         <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-4 px-4 py-3">
-            <Link href="/">
-              <LOSLogo size="sm" />
+            <Link href="/" className="flex items-center gap-2">
+              {settings.logoUrl === DEFAULT_SETTINGS.logoUrl ? (
+                <LOSLogo size="sm" showText={false} />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={settings.logoUrl} alt={settings.siteName} className="h-8 w-auto object-contain" />
+              )}
+              <span className="font-semibold text-slate-900">{settings.siteName}</span>
             </Link>
 
             <div className="flex items-center gap-3">

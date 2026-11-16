@@ -183,6 +183,7 @@ model Restaurant {
   contactPhone String?
   address     String?
   active      Boolean  @default(true)
+  isHalal     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -365,6 +366,7 @@ model Order {
   cancelReason        String?
   refundAttempts      Int       @default(0)
   lastRefundAttemptAt DateTime?
+  refundSeenAt        DateTime?
 
   deliverySiteId String?
   deliverySite   DeliverySite? @relation(fields: [deliverySiteId], references: [id])
@@ -408,6 +410,10 @@ model OrderItem {
   /// true when receivedAt was written by the auto-confirm sweep,
   /// false when the employee confirmed it manually.
   receivedBySystem Boolean  @default(false)
+
+  /// Set when the employee explicitly reports they did NOT receive their meal.
+  /// The auto-confirm sweep skips any item where this is non-null.
+  notReceivedAt    DateTime?
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

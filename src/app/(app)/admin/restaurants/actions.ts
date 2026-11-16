@@ -24,6 +24,7 @@ const restaurantSchema = z.object({
   contactName: z.string().trim().max(120).optional().or(z.literal('')),
   contactPhone: z.string().trim().max(40).optional().or(z.literal('')),
   address: z.string().trim().max(300).optional().or(z.literal('')),
+  isHalal: z.coerce.boolean().optional(),
 });
 
 function blankToNull(v: string | undefined): string | null {
@@ -70,6 +71,7 @@ export async function createRestaurant(_prev: ActionState, formData: FormData): 
       contactName: blankToNull(d.contactName),
       contactPhone: blankToNull(d.contactPhone),
       address: blankToNull(d.address),
+      isHalal: d.isHalal ?? false,
     },
   });
 
@@ -108,6 +110,7 @@ export async function updateRestaurant(_prev: ActionState, formData: FormData): 
       contactName: blankToNull(d.contactName),
       contactPhone: blankToNull(d.contactPhone),
       address: blankToNull(d.address),
+      isHalal: d.isHalal ?? false,
     },
   });
 

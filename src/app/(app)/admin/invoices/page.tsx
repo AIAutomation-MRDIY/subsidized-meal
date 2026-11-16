@@ -1,5 +1,8 @@
+import { redirect } from 'next/navigation';
+
 import { prisma } from '@/lib/prisma';
-import { requireCapability } from '@/lib/session';
+import { requireUser } from '@/lib/session';
+import { can } from '@/lib/rbac';
 import { formatSen } from '@/lib/money';
 import { formatWeekRange } from '@/lib/cycle';
 import { getLocale } from 'next-intl/server';
@@ -27,6 +30,7 @@ const STATUS_BADGE_CLASS: Record<string, string> = {
 
 type SearchParams = {
   page?: string;
+  year?: string;
   cycle?: string;
   restaurant?: string;
   status?: string;
@@ -37,21 +41,41 @@ export default async function AdminInvoicesPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  await requireCapability('catalogue:manage');
+  const user = await requireUser();
+  const canManage = user.superAdmin || can(user.role, 'catalogue:manage');
+  const canView = canManage || can(user.role, 'finance:view');
+  if (!canView) redirect('/forbidden');
 
   const params = await searchParams;
   const locale = await getLocale();
   const page = parsePage(params.page);
 
+  const selectedYear = params.year ?? '';
   const selectedCycleId = params.cycle ?? '';
   const selectedRestaurantId = params.restaurant ?? '';
   const selectedStatus = params.status ?? '';
 
-  // Cycles for filter dropdown — recent closed/fulfilled only
-  const cycles = await prisma.menuCycle.findMany({
+  // Distinct years from cycles for the year filter
+  const allCycleYears = await prisma.menuCycle.findMany({
     where: { status: { in: ['PUBLISHED', 'CLOSED', 'FULFILLED'] } },
+    select: { serviceWeekStart: true },
     orderBy: { serviceWeekStart: 'desc' },
-    take: 26,
+  });
+  const years = [...new Set(allCycleYears.map((c) => c.serviceWeekStart.getFullYear()))];
+
+  // Cycles for filter dropdown — filtered by selected year if set
+  const yearFilter = selectedYear
+    ? {
+        serviceWeekStart: {
+          gte: new Date(`${selectedYear}-01-01T00:00:00.000Z`),
+          lt: new Date(`${parseInt(selectedYear, 10) + 1}-01-01T00:00:00.000Z`),
+        },
+      }
+    : {};
+
+  const cycles = await prisma.menuCycle.findMany({
+    where: { status: { in: ['PUBLISHED', 'CLOSED', 'FULFILLED'] }, ...yearFilter },
+    orderBy: { serviceWeekStart: 'desc' },
     select: { id: true, serviceWeekStart: true, status: true },
   });
 
@@ -63,6 +87,7 @@ export default async function AdminInvoicesPage({
   });
 
   const where = {
+    ...(selectedYear ? { cycle: { serviceWeekStart: { gte: new Date(`${selectedYear}-01-01T00:00:00.000Z`), lt: new Date(`${parseInt(selectedYear, 10) + 1}-01-01T00:00:00.000Z`) } } } : {}),
     ...(selectedCycleId ? { cycleId: selectedCycleId } : {}),
     ...(selectedRestaurantId ? { restaurantId: selectedRestaurantId } : {}),
     ...(selectedStatus ? { status: selectedStatus as 'PENDING' | 'APPROVED' | 'PAID' | 'DISPUTED' } : {}),
@@ -96,6 +121,7 @@ export default async function AdminInvoicesPage({
   const pendingAmount = summary.find((g) => g.status === 'PENDING')?._sum.amountSen ?? 0;
 
   const filterParams = {
+    ...(selectedYear ? { year: selectedYear } : {}),
     ...(selectedCycleId ? { cycle: selectedCycleId } : {}),
     ...(selectedRestaurantId ? { restaurant: selectedRestaurantId } : {}),
     ...(selectedStatus ? { status: selectedStatus } : {}),
@@ -106,9 +132,9 @@ export default async function AdminInvoicesPage({
       <PageHeader
         title="Vendor Invoices"
         subtitle="Upload and track invoices from restaurants by service week"
-        action={
+        action={canManage ? (
           <InvoiceUploadDialog cycles={cycles} restaurants={restaurants} locale={locale} />
-        }
+        ) : undefined}
       />
 
       {/* ── Summary cards ─────────────────────────────────────────────── */}
@@ -146,6 +172,12 @@ export default async function AdminInvoicesPage({
         description="Filter by week, restaurant or status. Click a row to review or update."
         action={
           <form method="get" className="flex flex-wrap items-center gap-2">
+            <select name="year" defaultValue={selectedYear} className="input !w-24 !py-1 text-xs">
+              <option value="">All years</option>
+              {years.map((y) => (
+                <option key={y} value={String(y)}>{y}</option>
+              ))}
+            </select>
             <select name="cycle" defaultValue={selectedCycleId} className="input !w-44 !py-1 text-xs">
               <option value="">All weeks</option>
               {cycles.map((c) => (
@@ -243,7 +275,7 @@ export default async function AdminInvoicesPage({
                         {inv.notes ?? '—'}
                       </td>
                       <td>
-                        <InvoiceReviewDialog invoice={inv} locale={locale} />
+                        {canManage && <InvoiceReviewDialog invoice={inv} locale={locale} />}
                       </td>
                     </tr>
                   ))}

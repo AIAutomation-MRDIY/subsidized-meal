@@ -34,6 +34,7 @@ export async function GET(req: Request) {
   const result = await prisma.orderItem.updateMany({
     where: {
       receivedAt: null,
+      notReceivedAt: null, // skip items the employee reported as not received
       serviceDate: serviceDateFilter,
       order: { status: 'PAID' },
     },

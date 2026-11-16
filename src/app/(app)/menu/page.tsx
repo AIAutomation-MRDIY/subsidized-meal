@@ -176,7 +176,7 @@ export default async function MenuPage({
   const menuItems = await prisma.menuItem.findMany({
     where: { menuDayId: activeDay.id },
     orderBy: { sortOrder: 'asc' },
-    include: { dish: { include: { restaurant: { select: { name: true } } } } },
+    include: { dish: { include: { restaurant: { select: { name: true, isHalal: true } } } } },
   });
 
   const remaining = activeDayLocked
@@ -190,6 +190,7 @@ export default async function MenuPage({
     menuItemId: item.id,
     dishName: item.dish.name,
     restaurantName: item.dish.restaurant.name,
+    isHalal: item.dish.restaurant.isHalal,
     description: item.dish.description,
     tags: decodeTags(item.dish.tags),
     priceSen: employeePriceFor(item.priceSen, activeDay.serviceDate, rules, user.department),

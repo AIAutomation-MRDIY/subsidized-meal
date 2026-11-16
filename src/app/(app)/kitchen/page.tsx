@@ -7,6 +7,7 @@ import { requireCapability } from '@/lib/session';
 import { cyclePhase, formatDate, formatWeekRange, toDateKey } from '@/lib/cycle';
 import { kitchenSheet } from '@/lib/reporting';
 import { PageHeader, Section, EmptyState, PhaseBadge, Alert, Stat } from '@/components/ui';
+import { KitchenViewedMarker } from '@/components/kitchen-viewed-marker';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,23 @@ export default async function KitchenPage({
   const phase = cyclePhase(selected);
   const sheet = await kitchenSheet(selected.id);
 
+  // Today's "not received" reports — alert admin so they can follow up
+  const todayUtc = new Date(toDateKey(new Date()) + 'T00:00:00.000Z');
+  const notReceivedToday = await prisma.orderItem.findMany({
+    where: {
+      notReceivedAt: { not: null },
+      serviceDate: todayUtc,
+      order: { status: 'PAID' },
+    },
+    select: {
+      id: true,
+      dishName: true,
+      restaurantName: true,
+      order: { select: { user: { select: { name: true, staffId: true, department: true } } } },
+    },
+    orderBy: { notReceivedAt: 'asc' },
+  });
+
   const expandKey = params.expand ?? null;
 
   // Fetch employees for the expanded row
@@ -50,6 +68,7 @@ export default async function KitchenPage({
     staffId: string | null;
     department: string | null;
     deliverySiteName: string;
+    status: 'confirmed' | 'not-received' | 'pending';
   }[] = [];
 
   if (expandKey) {
@@ -72,6 +91,9 @@ export default async function KitchenPage({
           },
         },
         select: {
+          receivedAt: true,
+          receivedBySystem: true,
+          notReceivedAt: true,
           order: {
             select: {
               user: { select: { name: true, staffId: true, department: true } },
@@ -87,6 +109,7 @@ export default async function KitchenPage({
         staffId: i.order.user.staffId,
         department: i.order.user.department,
         deliverySiteName: i.order.deliverySite?.name ?? 'Unassigned',
+        status: i.notReceivedAt ? 'not-received' : i.receivedAt ? 'confirmed' : 'pending',
       }));
     }
   }
@@ -112,6 +135,7 @@ export default async function KitchenPage({
 
   return (
     <>
+      <KitchenViewedMarker />
       <PageHeader
         title={t('title')}
         subtitle={
@@ -174,6 +198,24 @@ export default async function KitchenPage({
           <Alert tone="warning">{t('stillOpenWarning')}</Alert>
         </div>
       ) : null}
+
+      {notReceivedToday.length > 0 && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+          <p className="mb-2 text-sm font-semibold text-red-800">
+            {notReceivedToday.length} employee{notReceivedToday.length !== 1 ? 's' : ''} reported not receiving their meal today
+          </p>
+          <ul className="space-y-1">
+            {notReceivedToday.map((item) => (
+              <li key={item.id} className="text-xs text-red-700">
+                <span className="font-medium">{item.order.user.name}</span>
+                {item.order.user.staffId ? ` (${item.order.user.staffId})` : ''}
+                {item.order.user.department ? ` · ${item.order.user.department}` : ''}
+                {' — '}{item.dishName} from {item.restaurantName}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="mb-6 grid gap-4 text-center sm:grid-cols-3">
         <Stat label={t('totalPortions')} value={totalPortions.toLocaleString()} />
@@ -271,6 +313,7 @@ export default async function KitchenPage({
                                             <th className="py-1.5 text-left font-medium">Staff ID</th>
                                             <th className="py-1.5 text-left font-medium">Department</th>
                                             <th className="py-1.5 text-left font-medium">Delivery Site</th>
+                                            <th className="py-1.5 text-left font-medium">Status</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
@@ -281,6 +324,11 @@ export default async function KitchenPage({
                                               <td className="py-1.5 font-mono text-slate-500">{emp.staffId ?? '—'}</td>
                                               <td className="py-1.5 text-slate-500">{emp.department ?? '—'}</td>
                                               <td className="py-1.5 text-slate-500">{emp.deliverySiteName}</td>
+                                              <td className="py-1.5">
+                                                {emp.status === 'confirmed' && <span className="text-emerald-600 font-medium">Confirmed</span>}
+                                                {emp.status === 'not-received' && <span className="text-red-600 font-medium">Not Received</span>}
+                                                {emp.status === 'pending' && <span className="text-amber-600 font-medium">Pending</span>}
+                                              </td>
                                             </tr>
                                           ))}
                                         </tbody>

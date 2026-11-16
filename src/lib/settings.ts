@@ -18,8 +18,8 @@ export type SiteSettings = {
 
 export const DEFAULT_SETTINGS: SiteSettings = {
   siteName: 'LOS',
-  logoUrl: '/mr-diy-logo.png',
-  faviconUrl: '/mr-diy-logo.png',
+  logoUrl: '/los-logo.svg',
+  faviconUrl: '/los-logo.svg',
   supportEmail: null,
   maintenanceMessage: null,
   mealReceiptCutoffHour: 18,

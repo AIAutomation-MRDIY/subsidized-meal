@@ -14,6 +14,8 @@ import { prisma } from '@/lib/prisma';
 import { assertCapability } from '@/lib/session';
 import { todayInAppTz, toDateKey, zonedToUtc, APP_TIMEZONE } from '@/lib/cycle';
 import { audit } from '@/lib/orders';
+import { sendEmail } from '@/lib/email';
+import { mealNotReceivedAdminEmail } from '@/lib/email-templates';
 
 export type ReceiptResult = { ok: boolean; error?: string };
 
@@ -29,6 +31,7 @@ async function loadAndGuardItem(userId: string, orderItemId: string) {
       serviceDate: true,
       receivedAt: true,
       receivedBySystem: true,
+      notReceivedAt: true,
       order: { select: { userId: true, status: true } },
     },
   });
@@ -113,6 +116,97 @@ export async function undoMealReceived(orderItemId: string): Promise<ReceiptResu
     serviceDate: toDateKey(item.serviceDate),
   });
 
+  revalidatePath('/menu');
+  return { ok: true };
+}
+
+/**
+ * Employee reports they did NOT receive their meal.
+ * Clears any existing receivedAt, blocks the auto-confirm sweep, and
+ * writes an audit entry so admin can review.
+ */
+export async function markMealNotReceived(orderItemId: string): Promise<ReceiptResult> {
+  const user = await assertCapability('order:place');
+
+  const guard = await loadAndGuardItem(user.id, orderItemId);
+  if (!guard.ok) return guard;
+
+  const { item } = guard;
+  if (item.notReceivedAt) return { ok: true }; // already flagged
+
+  await prisma.orderItem.update({
+    where: { id: orderItemId },
+    data: { notReceivedAt: new Date(), receivedAt: null, receivedBySystem: false },
+  });
+
+  await audit(user.id, 'meal.not_received', 'OrderItem', orderItemId, {
+    serviceDate: toDateKey(item.serviceDate),
+  });
+
+  // Alert admins (non-blocking)
+  prisma.orderItem.findUnique({
+    where: { id: orderItemId },
+    select: {
+      serviceDate: true,
+      dishName: true,
+      order: { select: { reference: true } },
+    },
+  }).then((detail) => {
+    if (!detail) return;
+    return prisma.user.findMany({
+      where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
+      select: { email: true },
+    }).then((admins) => {
+      const { subject, html } = mealNotReceivedAdminEmail({
+        employeeName: user.name,
+        dishName: detail.dishName,
+        serviceDate: toDateKey(detail.serviceDate),
+        orderReference: detail.order.reference,
+        appUrl: process.env.APP_URL ?? '',
+      });
+      return Promise.all(
+        admins.filter((a) => a.email).map((a) =>
+          sendEmail({ to: a.email!, subject, html }).catch((err) =>
+            console.error('[meal] not received email failed', err),
+          ),
+        ),
+      );
+    });
+  }).catch((err) => console.error('[meal] not received admin query failed', err));
+
+  revalidatePath('/my-meals');
+  revalidatePath('/menu');
+  return { ok: true };
+}
+
+/**
+ * Undoes a "not received" report — only before the cutoff hour.
+ */
+export async function undoMealNotReceived(orderItemId: string): Promise<ReceiptResult> {
+  const user = await assertCapability('order:place');
+
+  const guard = await loadAndGuardItem(user.id, orderItemId);
+  if (!guard.ok) return guard;
+
+  const { item } = guard;
+  if (!item.notReceivedAt) return { ok: true }; // nothing to undo
+
+  const [y, m, d] = toDateKey(item.serviceDate).split('-').map(Number);
+  const cutoff = zonedToUtc(y, m, d, 18, 0, APP_TIMEZONE);
+  if (new Date() >= cutoff) {
+    return { ok: false, error: 'The reporting window has closed; contact your administrator.' };
+  }
+
+  await prisma.orderItem.update({
+    where: { id: orderItemId },
+    data: { notReceivedAt: null },
+  });
+
+  await audit(user.id, 'meal.not_received.undo', 'OrderItem', orderItemId, {
+    serviceDate: toDateKey(item.serviceDate),
+  });
+
+  revalidatePath('/my-meals');
   revalidatePath('/menu');
   return { ok: true };
 }

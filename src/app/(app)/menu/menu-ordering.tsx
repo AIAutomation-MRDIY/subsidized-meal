@@ -14,6 +14,7 @@ export type MenuDish = {
   menuItemId: string;
   dishName: string;
   restaurantName: string;
+  isHalal: boolean;
   description: string | null;
   tags: string[];
   /**
@@ -171,9 +172,14 @@ export function MenuOrdering({
                 <Fragment key={restaurantName}>
                   <li
                     role="presentation"
-                    className="bg-slate-50/80 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
+                    className="flex items-center gap-2 bg-slate-50/80 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500"
                   >
                     {restaurantName}
+                    {group[0]?.isHalal && (
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 normal-case tracking-normal">
+                        HALAL
+                      </span>
+                    )}
                   </li>
                   {group.map((dish) => (
                     <DishRow
