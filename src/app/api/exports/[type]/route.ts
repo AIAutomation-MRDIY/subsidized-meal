@@ -8,7 +8,7 @@ import { can } from '@/lib/rbac';
 import { csvAmount, csvResponse, toCsv } from '@/lib/csv';
 import { decodeTags } from '@/lib/db-compat';
 import { formatWeekRange, toDateKey, zonedToUtc } from '@/lib/cycle';
-import { kitchenSheet, trailingWeeks, weeklyTotals } from '@/lib/reporting';
+import { trailingWeeks, weeklyTotals } from '@/lib/reporting';
 import { audit } from '@/lib/orders';
 
 export const dynamic = 'force-dynamic';
@@ -47,12 +47,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
   if (type === 'admin-orders' && !isSuperAdmin && !can(user.role, 'kitchen:view')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
-  if (type === 'kitchen' && !isSuperAdmin && !can(user.role, 'kitchen:view')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-  if (type === 'kitchen-employees' && !isSuperAdmin && !can(user.role, 'kitchen:view')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
   if (type === 'reconciliation' && !isSuperAdmin && !can(user.role, 'finance:export')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
@@ -77,10 +71,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ type
       return exportVendorOrders(user.id, cycleId, url.searchParams.get('vendor'));
     case 'admin-orders':
       return exportAdminOrders(user.id, cycleId);
-    case 'kitchen':
-      return exportKitchen(user.id, cycleId);
-    case 'kitchen-employees':
-      return exportKitchenEmployees(user.id, cycleId);
     case 'reconciliation':
       return exportReconciliation(user.id, url.searchParams.get('weeks'), url.searchParams.get('cycle'));
     case 'audit':
@@ -234,26 +224,6 @@ async function exportSubsidy(actorId: string, weeksRaw: string | null) {
 
   await audit(actorId, 'export.subsidy', 'Report', null, { weeks });
   return csvResponse(`subsidy-cost-last-${weeks}-weeks.csv`, csv);
-}
-
-async function exportKitchen(actorId: string, cycleId: string | null) {
-  if (!cycleId) return NextResponse.json({ error: 'Missing cycle' }, { status: 400 });
-
-  const cycle = await prisma.menuCycle.findUnique({ where: { id: cycleId } });
-  if (!cycle) return NextResponse.json({ error: 'Cycle not found' }, { status: 404 });
-
-  const sheet = await kitchenSheet(cycleId);
-  const rows = sheet.map((r) => [
-    r.restaurantName,
-    toDateKey(r.serviceDate),
-    r.dishName,
-    r.deliverySiteName,
-    r.quantity,
-  ]);
-
-  const csv = toCsv(['Restaurant', 'Service date', 'Dish', 'Delivery site', 'Portions'], rows);
-  await audit(actorId, 'export.kitchen', 'MenuCycle', cycleId, { rows: rows.length });
-  return csvResponse(`kitchen-counts-${toDateKey(cycle.serviceWeekStart)}.csv`, csv);
 }
 
 function clampWeeks(raw: string | null): number {
@@ -434,56 +404,6 @@ async function exportWeeklyMenuTemplate(actorId: string) {
   const csv = toCsv(headers, rows);
   await audit(actorId, 'export.weekly_menu_template', 'MenuCycle', null, {});
   return csvResponse('weekly-menu-template.csv', csv);
-}
-
-async function exportKitchenEmployees(actorId: string, cycleId: string | null) {
-  if (!cycleId) return NextResponse.json({ error: 'Missing cycle' }, { status: 400 });
-
-  const cycle = await prisma.menuCycle.findUnique({ where: { id: cycleId } });
-  if (!cycle) return NextResponse.json({ error: 'Cycle not found' }, { status: 404 });
-
-  // One row per employee per dish per service date — the full per-person breakdown
-  // the kitchen can use to check off individual orders on delivery day.
-  const items = await prisma.orderItem.findMany({
-    where: { order: { cycleId, status: 'PAID' } },
-    orderBy: [
-      { serviceDate: 'asc' },
-      { restaurantName: 'asc' },
-      { dishName: 'asc' },
-      { order: { user: { name: 'asc' } } },
-    ],
-    select: {
-      serviceDate: true,
-      restaurantName: true,
-      dishName: true,
-      quantity: true,
-      order: {
-        select: {
-          user: { select: { name: true, staffId: true, department: true } },
-          deliverySite: { select: { name: true } },
-        },
-      },
-    },
-  });
-
-  const rows = items.map((i) => [
-    toDateKey(i.serviceDate),
-    i.restaurantName,
-    i.dishName,
-    i.quantity,
-    i.order.user.staffId ?? '',
-    i.order.user.name,
-    i.order.user.department ?? '',
-    i.order.deliverySite?.name ?? 'Unassigned',
-  ]);
-
-  const csv = toCsv(
-    ['Service date', 'Restaurant', 'Dish', 'Qty', 'Staff ID', 'Name', 'Department', 'Delivery site'],
-    rows,
-  );
-
-  await audit(actorId, 'export.kitchen_employees', 'MenuCycle', cycleId, { rows: rows.length });
-  return csvResponse(`kitchen-employees-${toDateKey(cycle.serviceWeekStart)}.csv`, csv);
 }
 
 async function exportReconciliation(actorId: string, weeksRaw: string | null, cycleId: string | null = null) {
