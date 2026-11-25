@@ -245,6 +245,22 @@ The uploaded project already included:
 
 ---
 
+## 28 — Remove legacy kitchen exports, fix SMTP connection leak, event-driven test email — 25 Nov 2026
+
+1. **Removed: old kitchen CSV export buttons (Export CSV, Per-employee CSV).**
+   The two export buttons on the Kitchen page have been replaced by the Admin Weekly Excel and Vendor Excel templates added in an earlier release. The old buttons and their backend handlers (`/api/exports/kitchen` and `/api/exports/kitchen-employees`) have been removed.
+   *Files: `src/app/(app)/kitchen/page.tsx`, `src/app/api/exports/[type]/route.ts`*
+
+2. **Fixed: SMTP connection leak in `sendEmail()`.**
+   `nodemailer.createTransport()` was creating a new connection per call but never closing it. Added `transporter.close()` in a `finally` block so the SMTP connection is always released after each send, preventing connection exhaustion on Mailtrap's free tier.
+   *Files: `src/lib/email.ts`*
+
+3. **Reworked: `GET /api/test-email` now simulates real system events.**
+   The test endpoint previously sent templates to an arbitrary `?to=` address with placeholder data. It now accepts `?event=<name>`, looks up a real record from the database (most recent relevant record by default, or a specific ID via `&order=`, `&item=`, or `&invoice=`), and sends to the actual recipient the production system would use — the employee on a specific order, or the first admin for admin-broadcast events. Responds immediately (fire-and-forget); result visible in SMTP inbox seconds later.
+   *Files: `src/app/api/test-email/route.ts`*
+
+---
+
 ## 27 — LOS branding, reconciliation fixes, RBAC separation, superAdmin bypass — 12 Nov 2026
 
 1. **New: LOS brand identity applied across the entire UI.**
