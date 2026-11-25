@@ -38,12 +38,17 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
     ...(process.env.SMTP_USER && process.env.SMTP_PASS
       ? { auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } }
       : {}),
+    tls: { rejectUnauthorized: false },
   });
 
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? 'MR DIY Food Ordering <no-reply@mrdiy.com>',
-    to: payload.to,
-    subject: payload.subject,
-    html: payload.html,
-  });
+  try {
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM ?? 'MR DIY Food Ordering <no-reply@mrdiy.com>',
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
+    });
+  } finally {
+    transporter.close();
+  }
 }

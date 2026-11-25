@@ -158,12 +158,6 @@ export default async function KitchenPage({
                 {t('show')}
               </button>
             </form>
-            <a href={`/api/exports/kitchen?cycle=${selected.id}`} className="btn-secondary btn-sm">
-              {t('exportCsv')}
-            </a>
-            <a href={`/api/exports/kitchen-employees?cycle=${selected.id}`} className="btn-secondary btn-sm">
-              Per-employee CSV
-            </a>
             <a
               href={`/api/exports/admin-orders?cycle=${selected.id}`}
               className="btn-secondary btn-sm"
