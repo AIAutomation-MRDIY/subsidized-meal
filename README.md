@@ -271,7 +271,25 @@ GET /api/test-email?event=meal-not-received&item=<orderItemId>
 GET /api/test-email?event=invoice-uploaded&invoice=<invoiceId>
 ```
 
-The endpoint responds immediately (fire-and-forget); check your SMTP inbox a few seconds later. Use port `2525` for Mailtrap — ports 465 and 587 are often blocked on corporate networks.
+The endpoint awaits the send before responding, so the result (`sent` / `failed`) is visible directly in the response body. Use port `2525` for Mailtrap — ports 465 and 587 are often blocked on corporate networks and by Vercel's serverless infrastructure.
+
+---
+
+## API documentation (Swagger UI)
+
+The interactive API reference is available at `/api-docs` once the app is running:
+
+```
+http://localhost:3000/api-docs
+https://<your-app>.vercel.app/api-docs
+```
+
+It reads `public/swagger.yaml` and renders it with Swagger UI. To test authenticated endpoints:
+
+1. **Session-based endpoints** — sign in to the app at `/login` first in the same browser, then open `/api-docs`. The `session` HttpOnly cookie is sent automatically.
+2. **Cron / test endpoints** — click **Authorize** (🔒) in Swagger UI, enter your `CRON_SECRET` under `cronSecret`, then close. All subsequent requests will include the `x-cron-secret` header.
+
+The `/api-docs` page itself requires no authentication to view.
 
 ---
 
@@ -492,6 +510,8 @@ src/lib/
   money.ts, csv.ts       formatting and safe CSV output
   db-compat.ts           Postgres/SQLite differences in one file
 
+src/app/api-docs/        Swagger UI page — reads public/swagger.yaml; no auth required to view
+
 src/app/(app)/
   menu/                  employee: browse and order
   orders/                employee: history, order detail, retry payment
@@ -514,8 +534,8 @@ src/app/api/
   auth/joget-identify/   Joget SSO embedded login
   auth/oidc/             OIDC SSO start + callback
   cron/                  scheduled background jobs (refunds, meal confirm, cycle close)
-  exports/[type]/        CSV downloads (vendor totals, payroll deduction)
-  test-email/            development endpoint to preview all email templates
+  exports/[type]/        CSV / Excel downloads (finance, kitchen, catalogue, personal orders)
+  test-email/            dev/testing endpoint — simulates real email events using live DB data
 ```
 
 ---
