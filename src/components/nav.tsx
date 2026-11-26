@@ -66,7 +66,7 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
     <nav className="space-y-5">
       {groups.map((group) => (
         <div key={group.heading}>
-          <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+          <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             {group.heading}
           </p>
           <ul className="space-y-0.5">
