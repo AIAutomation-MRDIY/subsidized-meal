@@ -42,7 +42,7 @@ async function getOneAdmin() {
 //   meal-not-received    → first admin
 //   invoice-uploaded     → first admin
 //
-// Responds immediately after DB lookups; email sends happen in the background.
+// Awaits each send before responding so the result is visible in the response body.
 // ---------------------------------------------------------------------------
 
 const VALID_EVENTS = ['order-confirmed', 'refund-queued', 'refund-success', 'refund-failed', 'meal-not-received', 'invoice-uploaded'];

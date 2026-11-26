@@ -19,6 +19,7 @@
     "cron": "node scripts/cron-local.mjs"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@prisma/client": "^6.2.1",
     "@vercel/blob": "^2.9.0",
     "bcryptjs": "^2.4.3",
