@@ -41,11 +41,13 @@ tags:
   - name: Auth – OIDC
     description: Standard OpenID Connect / OAuth2 PKCE flow
   - name: Exports
-    description: CSV data exports (Finance, Kitchen, catalogue, personal)
+    description: CSV / Excel data exports (Finance, Kitchen, catalogue, personal)
   - name: Orders
     description: Order status polling
   - name: Webhooks
     description: Inbound payment gateway webhooks (HitPay)
+  - name: Dev / Testing
+    description: Development-only endpoints (blocked in production without CRON_SECRET)
 
 # ---------------------------------------------------------------------------
 # PATHS
@@ -227,21 +229,21 @@ paths:
         Returns a CSV file download. The `type` path parameter selects which
         export to run. Role requirements vary per type.
 
-        | `type` | Required role permission | Description |
-        |---|---|---|
-        | `orders` | `finance:export` (Finance role only) | All paid/awaiting orders for a cycle |
-        | `payments` | `finance:export` (Finance role only) | HitPay payment ledger |
-        | `subsidy` | `finance:export` (Finance role only) | Weekly subsidy cost summary |
-        | `reconciliation` | `finance:export` (Finance role only) | Full order + payment reconciliation per entity |
-        | `kitchen` | `kitchen:view` | Dish portion counts per delivery site |
-        | `kitchen-employees` | `kitchen:view` | Per-employee dish breakdown for a cycle |
-        | `audit` | `settings:manage` | Audit log export |
-        | `my-orders` | *(any signed-in user)* | Signed-in user's own order history |
-        | `restaurants` | `catalogue:manage` | Restaurant catalogue |
-        | `dishes` | `catalogue:manage` | Dish catalogue |
-        | `weekly-menu-template` | `menu:plan` | CSV template for weekly menu import |
+        | `type` | Required role permission | Format | Description |
+        |---|---|---|---|
+        | `orders` | `finance:export` (Finance only) | CSV | All paid/awaiting orders for a cycle |
+        | `payments` | `finance:export` (Finance only) | CSV | HitPay payment ledger |
+        | `subsidy` | `finance:export` (Finance only) | CSV | Weekly subsidy cost summary |
+        | `reconciliation` | `finance:export` (Finance only) | CSV | Full order + payment reconciliation per entity |
+        | `admin-orders` | `kitchen:view` (Admin / Analytics) | Excel (.xlsx) | Full weekly order list grouped by restaurant and delivery site |
+        | `vendor-orders` | `kitchen:view` (Admin / Analytics) | Excel (.xlsx) | Per-vendor portion counts for a cycle; requires `&vendor=<restaurantName>` |
+        | `audit` | `settings:manage` (Admin) | CSV | Audit log export |
+        | `my-orders` | *(any signed-in user)* | CSV | Signed-in user's own order history |
+        | `restaurants` | `catalogue:manage` (Admin) | CSV | Restaurant catalogue |
+        | `dishes` | `catalogue:manage` (Admin) | CSV | Dish catalogue |
+        | `weekly-menu-template` | `menu:plan` (Admin) | CSV | Template for bulk weekly menu import |
 
-        **Personal data notice:** `orders`, `payments`, `kitchen`, `kitchen-employees`,
+        **Personal data notice:** `orders`, `payments`, `admin-orders`, `vendor-orders`,
         and `reconciliation` contain employee names and staff IDs. Store on
         approved systems only; do not forward outside Finance/HR.
       security:
@@ -258,8 +260,8 @@ paths:
               - payments
               - subsidy
               - reconciliation
-              - kitchen
-              - kitchen-employees
+              - admin-orders
+              - vendor-orders
               - audit
               - my-orders
               - restaurants
@@ -321,6 +323,14 @@ paths:
           schema:
             type: string
             enum: [Orders, Payments, Exports, Cycles, Delivery, Users, Settings]
+        - name: vendor
+          in: query
+          required: false
+          description: |
+            Restaurant name (URL-encoded). Required for `vendor-orders`.
+          schema:
+            type: string
+            example: Restoran Pak Ali
         - name: q
           in: query
           required: false
@@ -329,7 +339,7 @@ paths:
             type: string
       responses:
         '200':
-          description: CSV file download
+          description: CSV or Excel file download (format depends on export type)
           headers:
             Content-Disposition:
               description: Suggested filename for the download
@@ -338,6 +348,10 @@ paths:
                 example: 'attachment; filename="orders-2026-09-30.csv"'
           content:
             text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
                 type: string
                 format: binary
@@ -521,6 +535,105 @@ paths:
                 missingIdentifiers:
                   value: { error: "Missing identifiers" }
 
+  # ── Dev: test email ──────────────────────────────────────────────────────
+  /api/test-email:
+    get:
+      tags: [Dev / Testing]
+      operationId: testEmail
+      summary: Simulate a system email event
+      description: |
+        Looks up a real database record and sends the matching email template to
+        the actual recipient the system would use — the employee on a specific
+        order, or the first admin user for admin-broadcast events.
+
+        **Access:** Unrestricted in `development` mode. In production, requires
+        the `x-cron-secret` header matching `CRON_SECRET`.
+
+        Responds immediately (fire-and-forget). Check your SMTP inbox a few
+        seconds later.
+
+        | `event` | Recipient | Real data source |
+        |---|---|---|
+        | `order-confirmed` | Employee who placed the order | Most recent PAID order |
+        | `refund-queued` | Employee whose refund was queued | Most recent PAID order |
+        | `refund-success` | Employee whose refund succeeded | Most recent PAID order |
+        | `refund-failed` | Employee + first admin | Most recent PAID order |
+        | `meal-not-received` | First admin | Most recent not-received order item |
+        | `invoice-uploaded` | First admin | Most recent vendor invoice |
+      parameters:
+        - name: event
+          in: query
+          required: true
+          description: Email event to simulate
+          schema:
+            type: string
+            enum:
+              - order-confirmed
+              - refund-queued
+              - refund-success
+              - refund-failed
+              - meal-not-received
+              - invoice-uploaded
+        - name: order
+          in: query
+          required: false
+          description: Specific order ID (CUID) for order-based events. Defaults to most recent PAID order.
+          schema:
+            type: string
+            example: clxxxxxxxxxxxxxxxxxxxxxxxx
+        - name: item
+          in: query
+          required: false
+          description: Specific order item ID for `meal-not-received`. Defaults to most recent not-received item.
+          schema:
+            type: string
+            example: clxxxxxxxxxxxxxxxxxxxxxxxx
+        - name: invoice
+          in: query
+          required: false
+          description: Specific vendor invoice ID for `invoice-uploaded`. Defaults to most recent invoice.
+          schema:
+            type: string
+            example: clxxxxxxxxxxxxxxxxxxxxxxxx
+      security:
+        - cronSecret: []
+      responses:
+        '200':
+          description: Emails queued for delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  queued:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        event:
+                          type: string
+                        to:
+                          type: string
+                          format: email
+              example:
+                queued:
+                  - event: order-confirmed
+                    to: employee@mrdiy.com
+        '400':
+          description: Missing or invalid `event`, or no matching record found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: No matching DB record found for the given event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
 # ---------------------------------------------------------------------------
 # COMPONENTS
 # ---------------------------------------------------------------------------
@@ -534,6 +647,14 @@ components:
       description: |
         HttpOnly session cookie set by the auth endpoints.
         Obtain via `/api/auth/joget-identify` or the OIDC flow.
+    cronSecret:
+      type: apiKey
+      in: header
+      name: x-cron-secret
+      description: |
+        Required for cron and dev endpoints in production.
+        Value must match the `CRON_SECRET` environment variable.
+        Not required in `development` mode (`NODE_ENV=development`).
 
   responses:
     Unauthenticated:

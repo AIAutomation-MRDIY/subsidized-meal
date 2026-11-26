@@ -205,12 +205,15 @@ export async function GET(req: NextRequest) {
     sends.push({ label: event, to: admin.email, subject, html });
   }
 
+  const results: { event: string; to: string; status: 'sent' | 'failed'; error?: string }[] = [];
   for (const s of sends) {
-    sendEmail({ to: s.to, subject: s.subject, html: s.html })
-      .catch((err) => console.error(`[test-email] ${s.label} → ${s.to}:`, err));
+    try {
+      await sendEmail({ to: s.to, subject: s.subject, html: s.html });
+      results.push({ event: s.label, to: s.to, status: 'sent' });
+    } catch (err) {
+      results.push({ event: s.label, to: s.to, status: 'failed', error: String(err) });
+    }
   }
 
-  return NextResponse.json({
-    queued: sends.map(s => ({ event: s.label, to: s.to })),
-  });
+  return NextResponse.json({ results });
 }
