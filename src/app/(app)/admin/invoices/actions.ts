@@ -183,7 +183,7 @@ export async function reviewInvoice(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const actor = await assertCapability('catalogue:manage');
+  const actor = await assertCapability('invoice:manage');
 
   const parsed = reviewSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };

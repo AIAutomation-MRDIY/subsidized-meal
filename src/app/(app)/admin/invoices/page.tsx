@@ -42,9 +42,9 @@ export default async function AdminInvoicesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const user = await requireUser();
-  const canManage = user.superAdmin || can(user.role, 'catalogue:manage');
-  const canView = canManage || can(user.role, 'finance:view');
-  if (!canView) redirect('/forbidden');
+  const canUpload = user.superAdmin || can(user.role, 'catalogue:manage');
+  const canReview = user.superAdmin || can(user.role, 'invoice:manage');
+  if (!canReview) redirect('/forbidden');
 
   const params = await searchParams;
   const locale = await getLocale();
@@ -132,7 +132,7 @@ export default async function AdminInvoicesPage({
       <PageHeader
         title="Vendor Invoices"
         subtitle="Upload and track invoices from restaurants by service week"
-        action={canManage ? (
+        action={canUpload ? (
           <InvoiceUploadDialog cycles={cycles} restaurants={restaurants} locale={locale} />
         ) : undefined}
       />
@@ -275,7 +275,7 @@ export default async function AdminInvoicesPage({
                         {inv.notes ?? '—'}
                       </td>
                       <td>
-                        {canManage && <InvoiceReviewDialog invoice={inv} locale={locale} />}
+                        {canReview && <InvoiceReviewDialog invoice={inv} locale={locale} />}
                       </td>
                     </tr>
                   ))}

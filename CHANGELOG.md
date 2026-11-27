@@ -245,6 +245,20 @@ The uploaded project already included:
 
 ---
 
+## 30 — RBAC: invoice:manage capability, Finance gets kitchen + audit, Analytics gets audit — 27 Nov 2026
+
+1. **New capability: `invoice:manage`.**
+   Split vendor invoice access out of `catalogue:manage` into a dedicated `invoice:manage` capability. Upload, review, approve, dispute, delete, and file download are now gated on `invoice:manage` instead of `catalogue:manage`.
+   *Files: `src/lib/rbac.ts`, `src/app/(app)/admin/invoices/actions.ts`, `src/app/(app)/admin/invoices/page.tsx`, `src/app/api/invoices/[id]/file/route.ts`, `src/app/(app)/layout.tsx`*
+
+2. **Finance role: added `invoice:manage` and `kitchen:view`.**
+   Finance can now review and approve vendor invoices (separating the upload step from approval) and view kitchen production counts (useful for reconciling invoices against meals served).
+
+3. **Analytics role: added `audit:view`.**
+   Analytics users can now view the audit log alongside Admin and Finance. Reception and Employee roles remain excluded.
+
+---
+
 ## 29 — Await all transactional email sends, dev blob skip, copy-last-week skips cancelled — 27 Nov 2026
 
 1. **Fixed: transactional emails silently dropped on Vercel.**
