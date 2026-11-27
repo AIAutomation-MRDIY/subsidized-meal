@@ -15,7 +15,7 @@ export async function GET(
 
   const canAccess =
     user.superAdmin ||
-    can(user.role, 'catalogue:manage') ||
+    can(user.role, 'invoice:manage') ||
     can(user.role, 'finance:view');
   if (!canAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 

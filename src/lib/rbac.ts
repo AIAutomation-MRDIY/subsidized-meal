@@ -14,6 +14,7 @@ export const CAPABILITIES = [
   'analytics:view', // demand, participation, popularity dashboards
   'finance:view', // revenue, subsidy cost, payment reconciliation
   'finance:export', // download settlement / payroll files
+  'invoice:manage', // upload and review vendor invoices
   'kitchen:view', // per-restaurant production counts after cutoff
   'settings:manage', // site branding, favicon, support email, maintenance banner
   'delivery:confirm', // reception marks a site's delivery as received, with optional photo proof
@@ -25,6 +26,7 @@ export type Capability = (typeof CAPABILITIES)[number];
 const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
   ADMIN: [
     'catalogue:manage',
+    'invoice:manage',
     'menu:plan',
     'users:manage',
     'subsidy:manage',
@@ -35,8 +37,8 @@ const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     'delivery:confirm',
     'audit:view',
   ],
-  ANALYTICS: ['analytics:view', 'kitchen:view', 'order:place'],
-  FINANCE: ['finance:view', 'finance:export', 'analytics:view', 'audit:view', 'order:place'],
+  ANALYTICS: ['analytics:view', 'kitchen:view', 'audit:view', 'order:place'],
+  FINANCE: ['finance:view', 'finance:export', 'invoice:manage', 'kitchen:view', 'analytics:view', 'audit:view', 'order:place'],
   RECEPTION: ['delivery:confirm', 'order:place'],
   USER: ['order:place'],
 };

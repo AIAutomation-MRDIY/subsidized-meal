@@ -32,9 +32,9 @@ Access is capability-based (`src/lib/rbac.ts`), not role-literal.
 
 | Role              | Landing page   | Can do                                                                                                           |
 | ----------------- | -------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Administrator** | `/analytics`   | Restaurants, dishes, menus, subsidy rules, users, companies, entities, audit log, settings, bulk refund; also orders their own meals. **Does not have Finance access** — Finance is a separate department. |
-| **Analytics**     | `/analytics`   | Demand dashboards, participation, top dishes, kitchen counts; also orders their own meals                        |
-| **Finance**       | `/finance`     | Revenue, subsidy cost, per-entity reconciliation, CSV exports; also sees analytics and orders their own meals    |
+| **Administrator** | `/analytics`   | Restaurants, dishes, menus, subsidy rules, users, companies, entities, settings, bulk refund, upload and review vendor invoices, audit log, kitchen counts; also orders their own meals. **Does not have Finance access** — Finance is a separate department. |
+| **Analytics**     | `/analytics`   | Demand dashboards, participation, top dishes, kitchen counts, audit log; also orders their own meals             |
+| **Finance**       | `/finance`     | Revenue, subsidy cost, per-entity reconciliation, CSV exports, vendor invoice review and approval, kitchen counts, audit log; also orders their own meals |
 | **Reception**     | `/reception`   | Mark deliveries as received at the assigned site (with optional photo proof); also orders their own meals        |
 | **Employee**      | `/menu`        | Browse the open menu and order for next week; self-cancel within the ordering window                             |
 

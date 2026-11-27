@@ -87,6 +87,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           { href: '/admin/restaurants', label: t('restaurants') },
           { href: '/admin/delivery-sites', label: t('deliverySites') },
           { href: '/admin/dishes', label: t('dishesPrices') },
+        ] : []),
+        ...(isSuperAdmin || can(user.role, 'invoice:manage') ? [
           { href: '/admin/invoices', label: 'Vendor Invoices' },
         ] : []),
         ...(isSuperAdmin || can(user.role, 'subsidy:manage') ? [{ href: '/admin/subsidies', label: t('subsidies') }] : []),
@@ -103,8 +105,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const insights: NavGroup = { heading: t('insights'), items: [] };
   if (isSuperAdmin || can(user.role, 'analytics:view')) insights.items.push({ href: '/analytics', label: t('analytics') });
   if (isSuperAdmin || can(user.role, 'finance:view')) insights.items.push({ href: '/finance', label: t('finance') });
-  // Show Vendor Invoices + Audit Log in insights for finance users (admins already see both in the admin section)
-  if (!isSuperAdmin && can(user.role, 'finance:view') && !can(user.role, 'menu:plan'))
+  // Show Vendor Invoices + Audit Log in insights for non-admin roles (admins already see both in the admin section)
+  if (!isSuperAdmin && can(user.role, 'invoice:manage') && !can(user.role, 'menu:plan'))
     insights.items.push({ href: '/admin/invoices', label: 'Vendor Invoices' });
   if (!isSuperAdmin && can(user.role, 'audit:view') && !can(user.role, 'menu:plan'))
     insights.items.push({ href: '/admin/audit', label: 'Audit Log' });
