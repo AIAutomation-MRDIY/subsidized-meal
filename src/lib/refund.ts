@@ -63,7 +63,7 @@ export async function queueRefundRequest(
       serviceWeek: formatWeekRange(order.cycle.serviceWeekStart),
       appUrl: process.env.APP_URL ?? '',
     });
-    sendEmail({ to: order.user.email, subject, html }).catch((err) =>
+    await sendEmail({ to: order.user.email, subject, html }).catch((err) =>
       console.error('[refund] queue email failed for', order.reference, err),
     );
   }
@@ -164,7 +164,6 @@ export async function processRefund(
       refundId: refund.id,
     });
 
-    // Send refund email (non-blocking — failure must not break the refund flow)
     if (order.user.email) {
       const { subject, html } = refundSuccessEmail({
         name: order.user.name,
@@ -173,7 +172,7 @@ export async function processRefund(
         serviceWeek: formatWeekRange(order.cycle.serviceWeekStart),
         appUrl: process.env.APP_URL ?? '',
       });
-      sendEmail({ to: order.user.email, subject, html }).catch((err) =>
+      await sendEmail({ to: order.user.email, subject, html }).catch((err) =>
         console.error('[refund] email failed for', order.reference, err),
       );
     }
@@ -194,7 +193,6 @@ export async function processRefund(
         lastError: errMsg,
       });
 
-      // Notify employee (non-blocking)
       if (order.user.email) {
         const { subject, html } = refundFailedEmployeeEmail({
           name: order.user.name,
@@ -202,16 +200,16 @@ export async function processRefund(
           amountSen: payment.amountSen,
           appUrl: process.env.APP_URL ?? '',
         });
-        sendEmail({ to: order.user.email, subject, html }).catch((err) =>
+        await sendEmail({ to: order.user.email, subject, html }).catch((err) =>
           console.error('[refund] employee failed email failed for', order.reference, err),
         );
       }
 
-      // Alert all admins (non-blocking)
-      prisma.user.findMany({
-        where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
-        select: { email: true },
-      }).then((admins) => {
+      try {
+        const admins = await prisma.user.findMany({
+          where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
+          select: { email: true },
+        });
         const { subject, html } = refundFailedAdminEmail({
           reference: order.reference,
           employeeName: order.user.name,
@@ -219,14 +217,16 @@ export async function processRefund(
           amountSen: payment.amountSen,
           appUrl: process.env.APP_URL ?? '',
         });
-        return Promise.all(
+        await Promise.all(
           admins.filter((a) => a.email).map((a) =>
             sendEmail({ to: a.email!, subject, html }).catch((err) =>
               console.error('[refund] admin alert email failed', err),
             ),
           ),
         );
-      }).catch((err) => console.error('[refund] admin alert query failed', err));
+      } catch (err) {
+        console.error('[refund] admin alert query failed', err);
+      }
     }
 
     return { ok: false, error: errMsg };

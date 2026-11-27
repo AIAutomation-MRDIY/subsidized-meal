@@ -17,6 +17,7 @@ function isBlobUrl(url: string | null | undefined): url is string {
 }
 
 async function uploadToBlob(file: File, path: string): Promise<string | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN || process.env.NODE_ENV === 'development') return null;
   try {
     const result = await Promise.race([
       put(path, file, { access: 'private' }),
@@ -132,11 +133,12 @@ export async function uploadInvoice(
     hasFile:        !!fileUrl,
   });
 
-  // Alert admins (non-blocking)
-  prisma.user.findMany({
-    where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
-    select: { email: true },
-  }).then((admins) => {
+  // Alert all admins
+  try {
+    const admins = await prisma.user.findMany({
+      where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
+      select: { email: true },
+    });
     const { subject, html } = invoiceUploadedAdminEmail({
       restaurantName: restaurant.name,
       cycleWeek: formatWeekRange(cycle.serviceWeekStart),
@@ -145,14 +147,16 @@ export async function uploadInvoice(
       uploadedBy: actor.name ?? 'Admin',
       appUrl: process.env.APP_URL ?? '',
     });
-    return Promise.all(
+    await Promise.all(
       admins.filter((a) => a.email).map((a) =>
         sendEmail({ to: a.email!, subject, html }).catch((err) =>
           console.error('[invoice] admin alert email failed', err),
         ),
       ),
     );
-  }).catch((err) => console.error('[invoice] admin alert query failed', err));
+  } catch (err) {
+    console.error('[invoice] admin alert query failed', err);
+  }
 
   revalidatePath('/admin/invoices');
   revalidatePath('/finance');

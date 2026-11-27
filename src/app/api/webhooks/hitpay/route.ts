@@ -172,29 +172,32 @@ export async function POST(request: Request) {
     });
   });
 
-  // Fire order confirmed email non-blocking — must not delay the webhook response to HitPay
   if (status === 'SUCCEEDED' && order.status === 'AWAITING_PAYMENT') {
-    prisma.order.findUnique({
-      where: { id: order.id },
-      select: {
-        reference: true,
-        netSen: true,
-        user: { select: { name: true, email: true } },
-        cycle: { select: { serviceWeekStart: true } },
-        _count: { select: { items: true } },
-      },
-    }).then((o) => {
-      if (!o?.user.email) return;
-      const { subject, html } = orderConfirmedEmail({
-        name: o.user.name,
-        reference: o.reference,
-        amountSen: o.netSen,
-        serviceWeek: formatWeekRange(o.cycle.serviceWeekStart),
-        mealCount: o._count.items,
-        appUrl: process.env.APP_URL ?? '',
+    try {
+      const o = await prisma.order.findUnique({
+        where: { id: order.id },
+        select: {
+          reference: true,
+          netSen: true,
+          user: { select: { name: true, email: true } },
+          cycle: { select: { serviceWeekStart: true } },
+          _count: { select: { items: true } },
+        },
       });
-      return sendEmail({ to: o.user.email, subject, html });
-    }).catch((err) => console.error('[webhook] order confirmed email failed for', order.reference, err));
+      if (o?.user.email) {
+        const { subject, html } = orderConfirmedEmail({
+          name: o.user.name,
+          reference: o.reference,
+          amountSen: o.netSen,
+          serviceWeek: formatWeekRange(o.cycle.serviceWeekStart),
+          mealCount: o._count.items,
+          appUrl: process.env.APP_URL ?? '',
+        });
+        await sendEmail({ to: o.user.email, subject, html });
+      }
+    } catch (err) {
+      console.error('[webhook] order confirmed email failed for', order.reference, err);
+    }
   }
 
   return NextResponse.json({ received: true });
