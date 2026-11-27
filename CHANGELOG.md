@@ -245,6 +245,22 @@ The uploaded project already included:
 
 ---
 
+## 29 — Await all transactional email sends, dev blob skip, copy-last-week skips cancelled — 27 Nov 2026
+
+1. **Fixed: transactional emails silently dropped on Vercel.**
+   Vercel serverless functions terminate immediately after the response is returned. Fire-and-forget `.then().catch()` email chains were killed before they completed, so order confirmed, refund, meal-not-received, and invoice-upload emails were never delivered in production. Converted every send to an `await`ed call; errors are still caught locally so an SMTP failure cannot break the main request flow.
+   *Files: `src/lib/refund.ts` (refund queued, refund success, refund failed employee + admin broadcast), `src/app/api/webhooks/hitpay/route.ts` (order confirmed), `src/app/(app)/menu/actions.receipt.ts` (meal not received admin alert), `src/app/(app)/admin/invoices/actions.ts` (invoice uploaded admin alert)*
+
+2. **Fixed: Vercel Blob upload timeout in local development.**
+   When `BLOB_READ_WRITE_TOKEN` is present locally (e.g. pulled via `vercel env pull`), the upload timed out after 10 s because the Blob service is unreachable from local networks. Blob upload is now skipped entirely when `NODE_ENV=development`, falling back immediately to base64 inline storage.
+   *Files: `src/app/(app)/admin/invoices/actions.ts`*
+
+3. **Fixed: "Copy Last Week" did nothing when the previous week was cancelled.**
+   The action looked up exactly the calendar week before the current one. If that week was cancelled, no source was found and nothing was copied, with no feedback. Now both the button visibility check and the copy action find the most recent non-cancelled week before the current one, transparently skipping any cancelled weeks in between.
+   *Files: `src/app/(app)/admin/cycles/actions.ts`, `src/app/(app)/admin/cycles/[id]/page.tsx`*
+
+---
+
 ## 28 — Remove legacy kitchen exports, fix SMTP connection leak, event-driven test email — 25 Nov 2026
 
 1. **Removed: old kitchen CSV export buttons (Export CSV, Per-employee CSV).**

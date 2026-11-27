@@ -143,20 +143,20 @@ export async function markMealNotReceived(orderItemId: string): Promise<ReceiptR
     serviceDate: toDateKey(item.serviceDate),
   });
 
-  // Alert admins (non-blocking)
-  prisma.orderItem.findUnique({
-    where: { id: orderItemId },
-    select: {
-      serviceDate: true,
-      dishName: true,
-      order: { select: { reference: true } },
-    },
-  }).then((detail) => {
-    if (!detail) return;
-    return prisma.user.findMany({
-      where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
-      select: { email: true },
-    }).then((admins) => {
+  try {
+    const detail = await prisma.orderItem.findUnique({
+      where: { id: orderItemId },
+      select: {
+        serviceDate: true,
+        dishName: true,
+        order: { select: { reference: true } },
+      },
+    });
+    if (detail) {
+      const admins = await prisma.user.findMany({
+        where: { OR: [{ superAdmin: true }, { role: 'ADMIN' }] },
+        select: { email: true },
+      });
       const { subject, html } = mealNotReceivedAdminEmail({
         employeeName: user.name,
         dishName: detail.dishName,
@@ -164,15 +164,17 @@ export async function markMealNotReceived(orderItemId: string): Promise<ReceiptR
         orderReference: detail.order.reference,
         appUrl: process.env.APP_URL ?? '',
       });
-      return Promise.all(
+      await Promise.all(
         admins.filter((a) => a.email).map((a) =>
           sendEmail({ to: a.email!, subject, html }).catch((err) =>
             console.error('[meal] not received email failed', err),
           ),
         ),
       );
-    });
-  }).catch((err) => console.error('[meal] not received admin query failed', err));
+    }
+  } catch (err) {
+    console.error('[meal] not received admin query failed', err);
+  }
 
   revalidatePath('/my-meals');
   revalidatePath('/menu');

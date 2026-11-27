@@ -67,9 +67,10 @@ export default async function CycleDetailPage({
     }),
     prisma.menuCycle.findFirst({
       where: {
-        serviceWeekStart: addWeeks(dateOnly(cycle.serviceWeekStart), -1),
+        serviceWeekStart: { lt: cycle.serviceWeekStart },
         status: { not: 'CANCELLED' },
       },
+      orderBy: { serviceWeekStart: 'desc' },
       select: { id: true },
     }),
   ]);
