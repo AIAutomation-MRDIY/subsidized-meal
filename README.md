@@ -304,6 +304,8 @@ Delivery photos and vendor invoices are stored in Vercel Blob. Create **two Blob
 
 Without these tokens, image uploads fall back to base64 stored in the database.
 
+> **Local development:** Blob uploads are skipped automatically when `NODE_ENV=development`, even if `BLOB_READ_WRITE_TOKEN` is present (e.g. pulled via `vercel env pull`). Files fall back to base64 inline storage with no delay.
+
 ---
 
 ## Authentication
@@ -432,8 +434,8 @@ Managed via **Admin → Settings**. Changes take effect immediately (cached with
 - Switch `HITPAY_MODE` to `live`.
 - Confirm the HitPay webhook reaches `{APP_URL}/api/webhooks/hitpay`.
 - Register the Betterpay webhook at `{APP_URL}/api/webhooks/betterpay` if using Betterpay.
-- Set `SMTP_HOST` and related vars; test with `/api/test-email?event=order-confirmed`.
-- Set **Support Email** in Admin → Settings (receives not-received and refund-failed alerts).
+- Set `SMTP_HOST` and related vars; test each template with `/api/test-email?event=<name>` (see email testing section above).
+- Admin alert emails (meal not received, refund failed, invoice uploaded) are broadcast to all users with `role = ADMIN` or `superAdmin = true` — ensure at least one admin account has an email address.
 - Change every seeded password.
 
 ---
@@ -554,7 +556,7 @@ src/app/api/
 - **The payment gateway is not named in employee-facing screens.**
 - **Submitted orders reuse the ordering screen, read-only.**
 - **Create forms live in dialogs**, not permanent side panels.
-- **Non-blocking email.** All email sends use `.catch()` so a mail server failure never breaks the main request flow.
+- **Awaited email with error isolation.** All transactional email sends are `await`ed so they complete before the serverless function returns (required on Vercel), but errors are caught locally so an SMTP failure never breaks the main request flow.
 
 ---
 

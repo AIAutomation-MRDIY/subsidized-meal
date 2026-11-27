@@ -378,9 +378,10 @@ export async function copyPreviousWeek(formData: FormData): Promise<void> {
 
   const source = await prisma.menuCycle.findFirst({
     where: {
-      serviceWeekStart: addWeeks(dateOnly(target.serviceWeekStart), -1),
+      serviceWeekStart: { lt: target.serviceWeekStart },
       status: { not: 'CANCELLED' },
     },
+    orderBy: { serviceWeekStart: 'desc' },
     include: { days: { orderBy: { serviceDate: 'asc' }, include: { items: true } } },
   });
   if (!source) return;
